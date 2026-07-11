@@ -1,0 +1,44 @@
+# Vrika POC overlay for Prowler on 192.168.9.188
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.vrika.yml up -d
+#
+# Access: http://192.168.9.188/  (port 80 via nginx)
+
+services:
+  nginx:
+    image: nginx:alpine@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
+    container_name: vrika-prowler-nginx
+    restart: unless-stopped
+    ports:
+      - "${PROWLER_PROXY_PORT:-80}:80"
+    volumes:
+      - ./contrib/reverse-proxy/nginx.vrika.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      ui:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  ui:
+    ports: !reset []
+
+  api:
+    ports: !reset []
+
+  mcp-server:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  valkey:
+    ports: !reset []
+
+  neo4j:
+    ports: !reset []
+    healthcheck:
+      start_period: 180s
+      interval: 15s
+      timeout: 15s
+      retries: 20

@@ -1,0 +1,51 @@
+import {
+  Separator,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/shadcn";
+import { DateWithTime, EntityInfo } from "@/components/shadcn/entities";
+import { ProviderType } from "@/types";
+
+interface ComplianceScanInfoProps {
+  scan: {
+    providerInfo: {
+      provider: ProviderType;
+      alias?: string;
+      uid?: string;
+    };
+    attributes: {
+      name?: string;
+      completed_at: string | null;
+    };
+  };
+}
+
+export const ComplianceScanInfo = ({ scan }: ComplianceScanInfoProps) => {
+  return (
+    <div className="flex w-full items-center gap-2">
+      <div className="flex min-w-0 basis-1/2 items-center overflow-hidden">
+        <EntityInfo
+          cloudProvider={scan.providerInfo.provider}
+          entityAlias={scan.providerInfo.alias}
+          entityId={scan.providerInfo.uid}
+          showCopyAction={false}
+        />
+      </div>
+      <Separator orientation="vertical" className="h-8 shrink-0" />
+      <div className="flex min-w-0 basis-1/2 flex-col items-start overflow-hidden">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p className="text-text-neutral-tertiary truncate text-xs">
+              {scan.attributes.name || "- -"}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {scan.attributes.name || "- -"}
+          </TooltipContent>
+        </Tooltip>
+        <DateWithTime inline dateTime={scan.attributes.completed_at} />
+      </div>
+    </div>
+  );
+};
