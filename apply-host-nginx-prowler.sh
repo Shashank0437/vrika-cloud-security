@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Run on 192.168.9.188 with sudo to expose Prowler at https://192.168.9.188:9443/
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="/etc/nginx/sites-available/nyxstrike"
 MARKER="# VRIKA_PROWLER_9443"
-SNIPPET="$ROOT/nginx/nyxstrike-prowler.conf.snippet"
+
+if [[ -f "$ROOT/nyxstrike-prowler.conf.snippet" ]]; then
+  SNIPPET="$ROOT/nyxstrike-prowler.conf.snippet"
+elif [[ -f "$ROOT/nginx/nyxstrike-prowler.conf.snippet" ]]; then
+  SNIPPET="$ROOT/nginx/nyxstrike-prowler.conf.snippet"
+else
+  echo "Missing nyxstrike-prowler.conf.snippet in $ROOT or $ROOT/nginx/"
+  exit 1
+fi
 
 if [[ $EUID -ne 0 ]]; then
   echo "Re-run with sudo: sudo bash $0"
