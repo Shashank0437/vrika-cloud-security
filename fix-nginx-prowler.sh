@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Run with sudo — adds/updates /prowler/ routes in the existing :443 server block.
+# Remove duplicate /prowler/ blocks and install the correct proxy config.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="/etc/nginx/sites-available/nyxstrike"
-MARKER="VRIKA_PROWLER_443"
-OLD_MARKER="VRIKA_PROWLER_9443"
+ENABLED="/etc/nginx/sites-enabled/nyxstrike"
 SNIPPET="$ROOT/nyxstrike-prowler.conf.snippet"
 
 if [[ $EUID -ne 0 ]]; then
@@ -12,16 +11,17 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-python3 - "$TARGET" "$SNIPPET" "$MARKER" "$OLD_MARKER" <<'PY'
+python3 - "$TARGET" "$SNIPPET" <<'PY'
 import re
 import sys
 from pathlib import Path
 
-target, snippet_path, marker, old_marker = sys.argv[1:5]
+target, snippet_path = sys.argv[1:3]
 content = Path(target).read_text()
 snippet = Path(snippet_path).read_text().rstrip() + "\n"
 
 # Remove legacy :9443 server block
+old_marker = "VRIKA_PROWLER_9443"
 if old_marker in content:
     start = content.find(f"# {old_marker}")
     if start != -1:
@@ -39,14 +39,16 @@ if old_marker in content:
                         break
             content = content[:start] + content[end:]
 
-# Remove existing prowler block (from marker through last prowler location)
-if marker in content:
-    pattern = re.compile(
-        r"\n\s*# " + re.escape(marker) + r".*?"
-        r"(?=\n\s*location |\n\s*}\s*$|\Z)",
-        re.DOTALL,
-    )
-    content = pattern.sub("\n", content, count=1)
+# Remove all prowler-related location blocks (duplicates + old wrong config)
+patterns = [
+    r"\n\s*location = /prowler \{[^}]*\}\n",
+    r"\n\s*# VRIKA_PROWLER_443[^\n]*\n",
+    r"\n\s*location \^~ /prowler/api/ \{.*?\n    \}\n",
+    r"\n\s*location \^~ /prowler/accounts/saml/ \{.*?\n    \}\n",
+    r"\n\s*location \^~ /prowler/ \{.*?\n    \}\n",
+]
+for pat in patterns:
+    content = re.sub(pat, "\n", content, flags=re.DOTALL)
 
 anchor = "    location / {"
 listen = content.find("listen 443")
@@ -55,9 +57,10 @@ if listen == -1:
 idx = content.find(anchor, listen)
 if idx == -1:
     raise SystemExit("catch-all location / not found")
-Path(target).write_text(content[:idx] + snippet + content[idx:])
-print(f"Installed /prowler/ locations in {target}")
+content = content[:idx] + snippet + content[idx:]
+Path(target).write_text(content)
+print(f"Cleaned and installed /prowler/ block in {target}")
 PY
 
 nginx -t && systemctl reload nginx
-echo "Prowler: https://192.168.9.188/prowler/"
+echo "OK: https://192.168.9.188/prowler/"

@@ -24,6 +24,12 @@ services:
         NEXT_PUBLIC_PROWLER_RELEASE_VERSION: ${NEXT_PUBLIC_PROWLER_RELEASE_VERSION:-v5.34.0}
     image: vrika-prowler-ui:local
     ports: !reset []
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/prowler/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
 
   api:
     ports: !reset []
