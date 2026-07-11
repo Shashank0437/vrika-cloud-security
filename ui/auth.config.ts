@@ -11,7 +11,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { getToken, getUserByMe } from "./actions/auth";
-import { withAppPath } from "./lib/base-path";
+import { withAppPath, stripAppPath } from "./lib/base-path";
 import { apiBaseUrl } from "./lib";
 import type { RolePermissionAttributes } from "./types/users";
 
@@ -209,8 +209,8 @@ export const authConfig = {
     maxAge: 24 * 60 * 60,
   },
   pages: {
-    signIn: "/sign-in",
-    newUser: "/sign-up",
+    signIn: withAppPath("/sign-in"),
+    newUser: withAppPath("/sign-up"),
   },
 
   providers: [
@@ -283,10 +283,10 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const sessionError = auth?.error;
-      const isSignUpPage = nextUrl.pathname === "/sign-up";
-      const isSignInPage = nextUrl.pathname === "/sign-in";
-      const isInvitationPage =
-        nextUrl.pathname.startsWith("/invitation/accept");
+      const path = stripAppPath(nextUrl.pathname);
+      const isSignUpPage = path === "/sign-up";
+      const isSignInPage = path === "/sign-in";
+      const isInvitationPage = path.startsWith("/invitation/accept");
 
       // Allow access to sign-up, sign-in, and invitation pages
       if (isSignUpPage || isSignInPage || isInvitationPage) return true;
@@ -297,7 +297,7 @@ export const authConfig = {
         const signInUrl = new URL(withAppPath("/sign-in"), nextUrl.origin);
         signInUrl.searchParams.set(
           "callbackUrl",
-          nextUrl.pathname + nextUrl.search,
+          withAppPath(path) + nextUrl.search,
         );
         // Include session error if present (e.g., RefreshAccessTokenError)
         if (sessionError) {

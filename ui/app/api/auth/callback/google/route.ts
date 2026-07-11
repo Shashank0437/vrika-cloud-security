@@ -7,6 +7,7 @@ import {
   getInvitationTokenFromCallbackPath,
   getSafeCallbackPath,
 } from "@/lib/auth-callback-url";
+import { withAppPath } from "@/lib/base-path";
 import { apiBaseUrl, baseUrl } from "@/lib/helper";
 
 export async function GET(req: Request) {
@@ -63,13 +64,13 @@ export async function GET(req: Request) {
     } catch (error) {
       console.error("SignIn error:", error);
       return NextResponse.redirect(
-        new URL("/sign-in?error=AuthenticationFailed", baseUrl),
+        new URL(`${withAppPath("/sign-in")}?error=AuthenticationFailed`, baseUrl),
       );
     }
   } catch (error) {
     console.error("Error in Google callback:", error);
     return NextResponse.redirect(
-      new URL("/sign-in?error=AuthenticationFailed", baseUrl),
+      new URL(`${withAppPath("/sign-in")}?error=AuthenticationFailed`, baseUrl),
     );
   }
 }

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { signIn } from "@/auth.config";
 import { getSafeCallbackPath } from "@/lib/auth-callback-url";
+import { withAppPath } from "@/lib/base-path";
 import { apiBaseUrl, baseUrl } from "@/lib/helper";
 
 export async function GET(req: Request) {
@@ -52,6 +53,6 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL(callbackPath, baseUrl));
   } catch (error) {
     console.error("SAML authentication failed:", error);
-    return NextResponse.redirect(new URL("/sign-in", baseUrl));
+    return NextResponse.redirect(new URL(withAppPath("/sign-in"), baseUrl));
   }
 }

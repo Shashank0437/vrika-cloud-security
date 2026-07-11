@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextAuthRequest } from "next-auth";
 
 import { auth } from "@/auth.config";
-import { withAppPath } from "@/lib/base-path";
+import { withAppPath, stripAppPath } from "@/lib/base-path";
 
 const publicRoutes = [
   "/sign-in",
@@ -20,7 +20,7 @@ const isPublicRoute = (pathname: string): boolean => {
 
 // NextAuth's auth() wrapper - renamed from middleware to proxy
 export default auth((req: NextAuthRequest) => {
-  const { pathname } = req.nextUrl;
+  const pathname = stripAppPath(req.nextUrl.pathname);
 
   const user = req.auth?.user;
   const sessionError = req.auth?.error;
@@ -29,13 +29,19 @@ export default auth((req: NextAuthRequest) => {
   if (sessionError && !isPublicRoute(pathname)) {
     const signInUrl = new URL(withAppPath("/sign-in"), req.nextUrl.origin);
     signInUrl.searchParams.set("error", sessionError);
-    signInUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      withAppPath(pathname) + req.nextUrl.search,
+    );
     return NextResponse.redirect(signInUrl);
   }
 
   if (!user && !isPublicRoute(pathname)) {
     const signInUrl = new URL(withAppPath("/sign-in"), req.nextUrl.origin);
-    signInUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      withAppPath(pathname) + req.nextUrl.search,
+    );
     return NextResponse.redirect(signInUrl);
   }
 
