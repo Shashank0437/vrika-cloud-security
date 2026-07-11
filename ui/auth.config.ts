@@ -11,7 +11,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { getToken, getUserByMe } from "./actions/auth";
-import { withAppPath, stripAppPath } from "./lib/base-path";
+import { authApiBasePath, withAppPath, stripAppPath } from "./lib/base-path";
 import { apiBaseUrl } from "./lib";
 import type { RolePermissionAttributes } from "./types/users";
 
@@ -203,6 +203,7 @@ const refreshAccessToken = async (token: AuthToken): Promise<AuthToken> => {
 };
 
 export const authConfig = {
+  basePath: authApiBasePath(),
   session: {
     strategy: "jwt",
     // The session will be valid for 24 hours
