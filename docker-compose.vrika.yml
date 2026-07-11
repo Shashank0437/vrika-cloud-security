@@ -1,9 +1,4 @@
-# Vrika POC overlay — Prowler internal nginx on localhost:8090 only.
-# Public HTTPS entry: host nginx :9443 (see nginx/nyxstrike-prowler.conf.snippet)
-#
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.vrika.yml up -d
-
+# Vrika POC overlay — Prowler on 127.0.0.1:8090, public via host nginx /prowler/
 services:
   nginx:
     image: nginx:alpine@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
@@ -20,6 +15,14 @@ services:
         condition: service_healthy
 
   ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        NEXT_PUBLIC_BASE_PATH: /prowler
+        NEXT_PUBLIC_PROWLER_RELEASE_VERSION: ${NEXT_PUBLIC_PROWLER_RELEASE_VERSION:-v5.34.0}
+    image: vrika-prowler-ui:local
     ports: !reset []
 
   api:
