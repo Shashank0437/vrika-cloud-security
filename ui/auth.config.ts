@@ -11,6 +11,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { getToken, getUserByMe } from "./actions/auth";
+import { withAppPath } from "./lib/base-path";
 import { apiBaseUrl } from "./lib";
 import type { RolePermissionAttributes } from "./types/users";
 
@@ -293,7 +294,7 @@ export const authConfig = {
       // For all other routes, require authentication
       // Return NextResponse.redirect to preserve callbackUrl for post-login redirect
       if (!isLoggedIn) {
-        const signInUrl = new URL("/sign-in", nextUrl.origin);
+        const signInUrl = new URL(withAppPath("/sign-in"), nextUrl.origin);
         signInUrl.searchParams.set(
           "callbackUrl",
           nextUrl.pathname + nextUrl.search,

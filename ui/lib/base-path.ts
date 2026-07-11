@@ -1,0 +1,10 @@
+export const appBasePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+export function withAppPath(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${appBasePath}${normalized}`;
+}
+
+export function authApiBasePath(): string {
+  return withAppPath("/api/auth");
+}

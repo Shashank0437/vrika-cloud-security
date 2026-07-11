@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextAuthRequest } from "next-auth";
 
 import { auth } from "@/auth.config";
+import { withAppPath } from "@/lib/base-path";
 
 const publicRoutes = [
   "/sign-in",
@@ -26,14 +27,14 @@ export default auth((req: NextAuthRequest) => {
 
   // If there's a session error (e.g., RefreshAccessTokenError), redirect to login with error info
   if (sessionError && !isPublicRoute(pathname)) {
-    const signInUrl = new URL("/sign-in", req.url);
+    const signInUrl = new URL(withAppPath("/sign-in"), req.nextUrl.origin);
     signInUrl.searchParams.set("error", sessionError);
     signInUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
     return NextResponse.redirect(signInUrl);
   }
 
   if (!user && !isPublicRoute(pathname)) {
-    const signInUrl = new URL("/sign-in", req.url);
+    const signInUrl = new URL(withAppPath("/sign-in"), req.nextUrl.origin);
     signInUrl.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
     return NextResponse.redirect(signInUrl);
   }
@@ -42,14 +43,18 @@ export default auth((req: NextAuthRequest) => {
     const permissions = user.permissions;
 
     if (pathname.startsWith("/billing") && !permissions.manage_billing) {
-      return NextResponse.redirect(new URL("/profile", req.url));
+      return NextResponse.redirect(
+        new URL(withAppPath("/profile"), req.nextUrl.origin),
+      );
     }
 
     if (
       pathname.startsWith("/integrations") &&
       !permissions.manage_integrations
     ) {
-      return NextResponse.redirect(new URL("/profile", req.url));
+      return NextResponse.redirect(
+        new URL(withAppPath("/profile"), req.nextUrl.origin),
+      );
     }
   }
 

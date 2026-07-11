@@ -1,4 +1,16 @@
-    # VRIKA_PROWLER_443 — Cloud Security at https://HOST/prowler/
+    # --- Prowler Cloud Security (internal docker nginx on 127.0.0.1:8090) ---
+    # Workaround until UI rebuild: current build calls /api/auth and /sign-in without /prowler
+    location ^~ /api/auth/ {
+        proxy_pass http://127.0.0.1:8090/prowler/api/auth/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /sign-in {
+        return 302 /prowler/sign-in$is_args$args;
+    }
+
     location = /prowler {
         proxy_pass http://127.0.0.1:8090/prowler;
         proxy_set_header Host $host;
@@ -9,6 +21,23 @@
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
     }
+
+    location ^~ /prowler/api/auth/ {
+        proxy_pass http://127.0.0.1:8090/prowler/api/auth/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /prowler/api/health {
+        proxy_pass http://127.0.0.1:8090/prowler/api/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location ^~ /prowler/api/ {
         proxy_pass http://127.0.0.1:8090/api/;
         proxy_set_header Host $host;
@@ -18,6 +47,7 @@
         proxy_read_timeout 300s;
         client_max_body_size 50m;
     }
+
     location ^~ /prowler/accounts/saml/ {
         proxy_pass http://127.0.0.1:8090/accounts/saml/;
         proxy_set_header Host $host;
@@ -25,6 +55,7 @@
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
     location ^~ /prowler/ {
         proxy_pass http://127.0.0.1:8090/prowler/;
         proxy_set_header Host $host;
@@ -35,3 +66,4 @@
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
     }
+    # --- end Prowler ---
