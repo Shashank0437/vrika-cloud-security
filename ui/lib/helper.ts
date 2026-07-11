@@ -15,10 +15,11 @@ import { readEnv } from "@/lib/runtime-env";
 import { AuthSocialProvider, MetaDataProps, PermissionInfo } from "@/types";
 
 export const baseUrl = process.env.AUTH_URL;
-export const apiBaseUrl = readEnv(
-  "UI_API_BASE_URL",
-  "NEXT_PUBLIC_API_BASE_URL",
-);
+// Server actions use API_BASE_URL (internal docker: http://api:8080/api/v1).
+// Browser/client code falls back to UI_API_BASE_URL (public /prowler URL).
+export const apiBaseUrl =
+  readEnv("API_BASE_URL") ??
+  readEnv("UI_API_BASE_URL", "NEXT_PUBLIC_API_BASE_URL");
 
 /**
  * Extracts a form value from a FormData object
