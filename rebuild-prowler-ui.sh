@@ -6,7 +6,7 @@ cd "$ROOT"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.vrika.yml"
 
 $COMPOSE build ui
-$COMPOSE up -d ui nginx
+$COMPOSE up -d ui nginx --force-recreate
 
 echo "Waiting for UI health..."
 for i in $(seq 1 30); do
