@@ -2764,22 +2764,18 @@ class ScanViewSet(BaseRLSViewSet):
                 lock_key = f"vrika-{variant}-pdf:{scan.id}"
                 if not cache.get(lock_key):
                     cache.set(lock_key, True, timeout=3600)
-                    task_id = str(uuid.uuid4())
-                    create_scan_task_record(
-                        tenant_id=str(scan.tenant_id),
-                        task_id=task_id,
-                        task_name="scan-vrika-scan-report",
-                    )
+                    tenant_id = str(scan.tenant_id)
+                    scan_id = str(scan.id)
+                    provider_id = str(scan.provider_id)
                     transaction.on_commit(
-                        lambda task_id=task_id: (
+                        lambda tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id, variant=variant: (
                             generate_vrika_scan_pdf_task.apply_async(
                                 kwargs={
-                                    "tenant_id": str(scan.tenant_id),
-                                    "scan_id": str(scan.id),
-                                    "provider_id": str(scan.provider_id),
+                                    "tenant_id": tenant_id,
+                                    "scan_id": scan_id,
+                                    "provider_id": provider_id,
                                     "variant": variant,
-                                },
-                                task_id=task_id,
+                                }
                             )
                         )
                     )
