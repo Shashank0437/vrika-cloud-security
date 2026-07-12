@@ -15,6 +15,11 @@
 #   # Rebuild overview dashboard tables (UI reads scan_summaries, not raw findings):
 #   TARGET_TENANT_ID=<testcorp-uuid> bash scripts/migrate-prowler-tenant-data.sh backfill
 #
+# Example (merge old Prowler tenant into Vrika TESTCORP org):
+#   SOURCE_TENANT_ID=292fcdbc-9bc0-4c09-895d-46efe9341977 \
+#   TARGET_TENANT_ID=80281f43-521e-457e-ab59-3ca1df936a59 \
+#   CONFIRM=YES bash scripts/migrate-prowler-tenant-data.sh migrate
+#
 # Optional: skip Neo4j attack-path graph copy (postgres-only migration):
 #   SKIP_NEO4J=1 SOURCE_TENANT_ID=... TARGET_TENANT_ID=... bash scripts/...
 #
@@ -159,6 +164,91 @@ print('Queued task id:', result.id)
   echo "Watch worker logs: docker compose -f docker-compose.yml -f docker-compose.vrika.yml logs -f worker"
 }
 
+prepare_target_for_merge() {
+  local source="$1"
+  local target="$2"
+
+  echo "=== Preparing TARGET for merge (remove partial Vrika-bridge junk) ==="
+  pg_psql <<SQL
+-- TARGET often has an in-flight scan + duplicate provider from the embed bridge.
+-- Remove incomplete scans and their findings so SOURCE data can merge cleanly.
+
+DELETE FROM resource_finding_mappings
+WHERE finding_id IN (SELECT id FROM findings WHERE tenant_id = '$target'::uuid);
+
+DELETE FROM findings WHERE tenant_id = '$target'::uuid;
+
+DELETE FROM attack_paths_scans WHERE tenant_id = '$target'::uuid;
+
+DELETE FROM scan_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM daily_severity_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM finding_group_daily_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM compliance_overview_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM compliance_requirements_overviews WHERE tenant_id = '$target'::uuid;
+DELETE FROM threatscore_snapshots WHERE tenant_id = '$target'::uuid;
+DELETE FROM attack_surface_overviews WHERE tenant_id = '$target'::uuid;
+DELETE FROM provider_compliance_scores WHERE tenant_id = '$target'::uuid;
+DELETE FROM resource_scan_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM scan_category_summaries WHERE tenant_id = '$target'::uuid;
+DELETE FROM scan_resource_group_summaries WHERE tenant_id = '$target'::uuid;
+
+DELETE FROM scans WHERE tenant_id = '$target'::uuid;
+
+-- Drop duplicate cloud account provider on TARGET (same uid as SOURCE, no scans left).
+DELETE FROM provider_secrets
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+);
+
+DELETE FROM integration_provider_mappings
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+);
+
+DELETE FROM provider_group_memberships
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+);
+
+DELETE FROM providers tp
+USING providers sp
+WHERE sp.tenant_id = '$source'::uuid
+  AND tp.tenant_id = '$target'::uuid
+  AND tp.provider = sp.provider
+  AND tp.uid = sp.uid;
+SQL
+
+  echo "=== TARGET state after cleanup ==="
+  pg_psql -c "
+    SELECT
+      (SELECT COUNT(*) FROM scans WHERE tenant_id = '$target'::uuid) AS scans,
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$target'::uuid) AS findings,
+      (SELECT COUNT(*) FROM providers WHERE tenant_id = '$target'::uuid) AS providers;
+  "
+  echo "=== SOURCE state (data to merge) ==="
+  pg_psql -c "
+    SELECT
+      (SELECT COUNT(*) FROM scans WHERE tenant_id = '$source'::uuid) AS scans,
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$source'::uuid) AS findings,
+      (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$source'::uuid) AS scan_summaries;
+  "
+}
+
 migrate_postgres() {
   local source="$1"
   local target="$2"
@@ -186,50 +276,7 @@ migrate_postgres() {
 
   echo "=== Migrating postgres tenant_id: $source -> $target ==="
 
-  echo "=== Removing duplicate empty providers on TARGET (same cloud account as SOURCE) ==="
-  pg_psql <<SQL
--- Bridge often creates an empty provider on TARGET with the same AWS/GCP uid as SOURCE.
-DELETE FROM provider_secrets
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
-);
-
-DELETE FROM integration_provider_mappings
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
-);
-
-DELETE FROM provider_group_memberships
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
-);
-
-DELETE FROM providers tp
-USING providers sp
-WHERE sp.tenant_id = '$source'::uuid
-  AND tp.tenant_id = '$target'::uuid
-  AND tp.provider = sp.provider
-  AND tp.uid = sp.uid
-  AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id);
-SQL
+  prepare_target_for_merge "$source" "$target"
 
   pg_psql <<SQL
 BEGIN;
@@ -365,6 +412,14 @@ run_migrate() {
   echo ""
   echo "=== Backfilling overview tables for dashboard ==="
   TARGET_TENANT_ID="$target" run_backfill
+
+  echo ""
+  echo "=== Verify SOURCE is now empty ==="
+  pg_psql -c "
+    SELECT
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$source'::uuid) AS source_findings_left,
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$target'::uuid) AS target_findings;
+  "
 
   echo ""
   echo "Done. Hard-refresh Cloud Security in Vrika (Cmd+Shift+R)."
