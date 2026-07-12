@@ -224,6 +224,136 @@ COMMIT;
 SQL
 }
 
+merge_duplicate_resources() {
+  local source="$1"
+  local target="$2"
+
+  echo "=== Merging duplicate resources (same provider + uid) ==="
+  pg_psql <<SQL
+BEGIN;
+
+DO \$\$
+DECLARE
+  pair RECORD;
+  r RECORD;
+  updated BIGINT;
+BEGIN
+  FOR pair IN
+    SELECT sr.id AS source_resource_id, tr.id AS target_resource_id
+    FROM resources sr
+    JOIN resources tr
+      ON tr.provider_id = sr.provider_id AND tr.uid = sr.uid
+    WHERE sr.tenant_id = '$source'::uuid
+      AND tr.tenant_id = '$target'::uuid
+  LOOP
+    RAISE NOTICE 'Re-pointing data from source resource % to target resource %',
+      pair.source_resource_id, pair.target_resource_id;
+
+    FOR r IN
+      SELECT DISTINCT c.table_name, c.column_name
+      FROM information_schema.columns c
+      JOIN information_schema.tables t
+        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+      WHERE c.table_schema = 'public'
+        AND c.column_name = 'resource_id'
+        AND c.data_type = 'uuid'
+        AND t.table_type = 'BASE TABLE'
+        AND c.table_name <> 'resources'
+      ORDER BY c.table_name
+    LOOP
+      EXECUTE format(
+        'UPDATE %I SET %I = %L::uuid WHERE %I = %L::uuid',
+        r.table_name, r.column_name,
+        pair.target_resource_id, r.column_name, pair.source_resource_id
+      );
+      GET DIAGNOSTICS updated = ROW_COUNT;
+      IF updated > 0 THEN
+        RAISE NOTICE '  Updated % rows in %.%', updated, r.table_name, r.column_name;
+      END IF;
+    END LOOP;
+
+    DELETE FROM resource_tag_mappings a
+    USING resource_tag_mappings b
+    WHERE a.id > b.id
+      AND a.tenant_id = b.tenant_id
+      AND a.resource_id = b.resource_id
+      AND a.tag_id = b.tag_id;
+
+    DELETE FROM resource_finding_mappings a
+    USING resource_finding_mappings b
+    WHERE a.id > b.id
+      AND a.tenant_id = b.tenant_id
+      AND a.resource_id = b.resource_id
+      AND a.finding_id = b.finding_id;
+
+    DELETE FROM resource_scan_summaries a
+    USING resource_scan_summaries b
+    WHERE a.id > b.id
+      AND a.tenant_id = b.tenant_id
+      AND a.scan_id = b.scan_id
+      AND a.resource_id = b.resource_id;
+
+    DELETE FROM resources WHERE id = pair.source_resource_id;
+    RAISE NOTICE 'Removed duplicate source resource %', pair.source_resource_id;
+  END LOOP;
+END \$\$;
+
+COMMIT;
+SQL
+}
+
+merge_duplicate_resource_tags() {
+  local source="$1"
+  local target="$2"
+
+  echo "=== Merging duplicate resource tags (same key + value) ==="
+  pg_psql <<SQL
+BEGIN;
+
+DO \$\$
+DECLARE
+  st RECORD;
+  target_tag_id UUID;
+  updated BIGINT;
+BEGIN
+  FOR st IN
+    SELECT id, key, value
+    FROM resource_tags
+    WHERE tenant_id = '$source'::uuid
+  LOOP
+    SELECT id INTO target_tag_id
+    FROM resource_tags
+    WHERE tenant_id = '$target'::uuid
+      AND key = st.key
+      AND value = st.value
+    LIMIT 1;
+
+    IF target_tag_id IS NOT NULL THEN
+      UPDATE resource_tag_mappings
+      SET tag_id = target_tag_id
+      WHERE tag_id = st.id;
+      GET DIAGNOSTICS updated = ROW_COUNT;
+      IF updated > 0 THEN
+        RAISE NOTICE '  Remapped % mappings from tag % to %', updated, st.id, target_tag_id;
+      END IF;
+
+      DELETE FROM resource_tag_mappings a
+      USING resource_tag_mappings b
+      WHERE a.id > b.id
+        AND a.tenant_id = b.tenant_id
+        AND a.resource_id = b.resource_id
+        AND a.tag_id = b.tag_id;
+
+      DELETE FROM resource_tags WHERE id = st.id;
+      RAISE NOTICE 'Removed duplicate source tag % (%, %)', st.id, st.key, st.value;
+    END IF;
+  END LOOP;
+END \$\$;
+
+COMMIT;
+SQL
+}
+
 migrate_postgres() {
   local source="$1"
   local target="$2"
@@ -252,6 +382,8 @@ migrate_postgres() {
   echo "=== Additive merge: OLD tenant data -> TESTCORP (keeps existing TESTCORP rows) ==="
 
   merge_duplicate_providers "$source" "$target"
+  merge_duplicate_resources "$source" "$target"
+  merge_duplicate_resource_tags "$source" "$target"
 
   pg_psql <<SQL
 BEGIN;
