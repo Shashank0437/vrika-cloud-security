@@ -6,6 +6,7 @@ import { ReactNode, Suspense } from "react";
 
 import { getProviders } from "@/actions/providers";
 import { getScansByState } from "@/actions/scans/scans";
+import { Providers } from "@/app/providers";
 import MainLayout from "@/components/layout/main-layout/main-layout";
 import {
   OnboardingCheckpointWatcher,
@@ -23,8 +24,6 @@ import { cn } from "@/lib/utils";
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { StoreInitializer } from "@/store/ui/store-initializer";
 import { SCAN_STATES } from "@/types/attack-paths";
-
-import { Providers } from "../providers";
 
 export const metadata: Metadata = {
   title: {

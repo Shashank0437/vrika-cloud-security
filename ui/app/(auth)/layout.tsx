@@ -5,14 +5,13 @@ import { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { ReactNode, Suspense } from "react";
 
+import { Providers } from "@/app/providers";
 import { RuntimePublicConfig } from "@/components/runtime-config/runtime-public-config";
 import { NavigationProgress, Toaster } from "@/components/shadcn";
 import { fontMono, fontSans } from "@/config/fonts";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib";
 import { readGatedEnv } from "@/lib/integrations";
-
-import { Providers } from "../providers";
 
 export const metadata: Metadata = {
   title: {
