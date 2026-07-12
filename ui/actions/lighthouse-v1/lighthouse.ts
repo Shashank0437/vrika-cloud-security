@@ -581,23 +581,23 @@ export const getLighthouseProvidersConfig = async () => {
       validProviders.length === 0 &&
       activeProviders.length > 0
     ) {
-      validProviders = activeProviders
-        .map((provider: LighthouseProviderResource) => {
+      validProviders = activeProviders.flatMap(
+        (provider: LighthouseProviderResource) => {
           const providerType = provider.attributes
             .provider_type as LighthouseProvider;
           const modelId = defaultModels[providerType];
           if (!modelId) {
-            return null;
+            return [];
           }
-          return {
-            id: providerType,
-            name: PROVIDER_DISPLAY_NAMES[providerType],
-            models: [{ id: modelId, name: modelId }],
-          };
-        })
-        .filter((provider): provider is NonNullable<typeof provider> =>
-          Boolean(provider),
-        );
+          return [
+            {
+              id: providerType,
+              name: PROVIDER_DISPLAY_NAMES[providerType],
+              models: [{ id: modelId, name: modelId }],
+            },
+          ];
+        },
+      );
     }
 
     return {
