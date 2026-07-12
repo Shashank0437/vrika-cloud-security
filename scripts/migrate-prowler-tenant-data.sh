@@ -584,24 +584,88 @@ provider_label() {
   printf '_Provider_%s' "$(lowercase_uuid "$1" | tr -d '-')"
 }
 
+neo4j_database_status() {
+  local db="$1"
+  neo4j_cypher system "SHOW DATABASE \`$db\` YIELD currentStatus RETURN currentStatus;" \
+    2>/dev/null | tail -1 | tr -d ' "[:space:]' || echo unknown
+}
+
 neo4j_stop_database() {
   local db="$1"
-  if [[ "$(neo4j_db_exists "$db")" != "0" ]]; then
-    neo4j_cypher system "STOP DATABASE \`$db\` WAIT;" 2>/dev/null || true
+  local status tries=0
+
+  if [[ "$(neo4j_db_exists "$db")" == "0" ]]; then
+    return 0
   fi
+
+  status="$(neo4j_database_status "$db")"
+  if [[ "$status" == "offline" ]]; then
+    echo "  $db already offline"
+    return 0
+  fi
+
+  echo "  Stopping $db (status: ${status:-unknown})..."
+  if ! neo4j_cypher system "STOP DATABASE \`$db\` WAIT;" 2>&1; then
+    echo "  WARN: STOP DATABASE returned non-zero for $db" >&2
+  fi
+
+  while [[ $tries -lt 30 ]]; do
+    status="$(neo4j_database_status "$db")"
+    if [[ "$status" == "offline" ]]; then
+      echo "  $db is offline"
+      return 0
+    fi
+    tries=$((tries + 1))
+    sleep 2
+  done
+
+  echo "ERROR: $db did not stop (last status: $status)" >&2
+  return 1
 }
 
 neo4j_start_database() {
   local db="$1"
   if [[ "$(neo4j_db_exists "$db")" != "0" ]]; then
-    neo4j_cypher system "START DATABASE \`$db\` WAIT;" 2>/dev/null || true
+    echo "  Starting $db..."
+    neo4j_cypher system "START DATABASE \`$db\` WAIT;" 2>&1 || true
   fi
+}
+
+neo4j_pause_graph_clients() {
+  if [[ "${NEO4J_PAUSE_SERVICES:-1}" == "0" ]]; then
+    echo "Skipping service pause (NEO4J_PAUSE_SERVICES=0)"
+    return 0
+  fi
+  echo "=== Pausing Prowler API/worker (Neo4j connection holders) ==="
+  "${COMPOSE[@]}" stop api worker worker-beat 2>/dev/null || true
+  sleep 5
+}
+
+neo4j_resume_graph_clients() {
+  if [[ "${NEO4J_PAUSE_SERVICES:-1}" == "0" ]]; then
+    return 0
+  fi
+  echo "=== Resuming Prowler API/worker ==="
+  "${COMPOSE[@]}" start api worker worker-beat 2>/dev/null || true
 }
 
 neo4j_drop_database() {
   local db="$1"
-  neo4j_stop_database "$db"
-  neo4j_cypher system "DROP DATABASE \`$db\` IF EXISTS;" 2>/dev/null || true
+  neo4j_pause_graph_clients
+  neo4j_stop_database "$db" || true
+  neo4j_cypher system "DROP DATABASE \`$db\` IF EXISTS;" 2>&1 || true
+  neo4j_resume_graph_clients
+}
+
+neo4j_try_online_copy() {
+  local src_db="$1"
+  local dst_db="$2"
+  echo "Trying online copy: CREATE DATABASE $dst_db AS COPY OF $src_db ..."
+  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
+    "CREATE DATABASE \`$dst_db\` AS COPY OF \`$src_db\`;" 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 neo4j_copy_database_admin() {
@@ -609,18 +673,34 @@ neo4j_copy_database_admin() {
   local dst_db="$2"
   local dump_dir="/data/migrate-dumps/tenant-copy-$$"
 
+  neo4j_pause_graph_clients
+  trap neo4j_resume_graph_clients EXIT
+
   echo "Stopping Neo4j databases for offline dump/load..."
-  neo4j_stop_database "$dst_db"
-  neo4j_stop_database "$src_db"
+  if ! neo4j_stop_database "$dst_db"; then
+    neo4j_start_database "$src_db"
+    trap - EXIT
+    neo4j_resume_graph_clients
+    return 1
+  fi
+  if ! neo4j_stop_database "$src_db"; then
+    neo4j_start_database "$src_db"
+    trap - EXIT
+    neo4j_resume_graph_clients
+    return 1
+  fi
 
   "${COMPOSE[@]}" exec -T neo4j mkdir -p "$dump_dir"
+  "${COMPOSE[@]}" exec -T neo4j chmod 700 "$dump_dir"
 
   echo "Dumping $src_db to $dump_dir ..."
   if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database dump \
-    --expand-commands "$src_db" --to-path="$dump_dir"; then
+    --expand-commands "$src_db" --to-path="$dump_dir" --verbose; then
     echo "neo4j-admin database dump failed." >&2
     neo4j_start_database "$src_db"
     "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+    trap - EXIT
+    neo4j_resume_graph_clients
     return 1
   fi
 
@@ -639,22 +719,28 @@ neo4j_copy_database_admin() {
   "; then
     neo4j_start_database "$src_db"
     "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+    trap - EXIT
+    neo4j_resume_graph_clients
     return 1
   fi
 
   echo "Loading $dst_db from dump ..."
   if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database load \
-    --expand-commands "$dst_db" --from-path="$dump_dir" --overwrite-destination=true; then
+    --expand-commands "$dst_db" --from-path="$dump_dir" --overwrite-destination=true --verbose; then
     echo "neo4j-admin database load failed." >&2
     neo4j_start_database "$src_db"
     "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+    trap - EXIT
+    neo4j_resume_graph_clients
     return 1
   fi
 
-  neo4j_cypher system "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>/dev/null || true
+  neo4j_cypher system "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>&1 || true
   neo4j_start_database "$src_db"
   neo4j_start_database "$dst_db"
   "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+  trap - EXIT
+  neo4j_resume_graph_clients
 }
 
 relabel_neo4j_graph() {
@@ -773,8 +859,7 @@ migrate_neo4j() {
     neo4j_drop_database "$dst_db"
   fi
 
-  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "CREATE DATABASE \`$dst_db\` AS COPY OF \`$src_db\`;" 2>/dev/null; then
+  if neo4j_try_online_copy "$src_db" "$dst_db"; then
     echo "Neo4j database copied via CREATE DATABASE AS COPY OF."
   elif neo4j_copy_database_admin "$src_db" "$dst_db"; then
     echo "Neo4j database copied successfully via dump/load."
