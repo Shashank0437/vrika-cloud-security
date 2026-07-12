@@ -112,7 +112,7 @@ export const ThreatScoreBadge = ({
       <CardContent className="flex flex-col gap-4 p-0 pr-14 lg:flex-row lg:items-start lg:gap-6">
         {/* Clickable ThreatScore button */}
         <button
-          className="border-border-neutral-secondary bg-bg-neutral-tertiary hover:border-border-neutral-primary hover:bg-bg-neutral-secondary flex shrink-0 cursor-pointer flex-row items-center justify-between gap-4 rounded-xl border p-3 pr-12 text-left transition-colors lg:pr-3"
+          className="border-border-neutral-secondary bg-bg-neutral-tertiary hover:border-border-neutral-primary hover:bg-bg-neutral-secondary flex min-w-[11rem] shrink-0 cursor-pointer flex-row items-center justify-between gap-4 rounded-xl border p-3 text-left transition-colors"
           onClick={handleCardClick}
           type="button"
         >

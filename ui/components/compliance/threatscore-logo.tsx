@@ -22,56 +22,13 @@ export const ThreatScoreLogo = () => {
 
   if (embedMode) {
     return (
-      <svg
-        viewBox="0 0 520 140"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-14 w-auto"
-        preserveAspectRatio="xMinYMid meet"
+      <span
+        className="text-text-neutral-primary shrink-0 text-lg leading-none font-bold tracking-tight whitespace-nowrap"
+        style={{ color: VRIKA_PURPLE }}
         aria-label="ThreatScore"
       >
-        <text
-          x="0"
-          y="98"
-          fontSize="72"
-          fontWeight="700"
-          fill={VRIKA_PURPLE}
-          fontFamily="inherit"
-        >
-          ThreatScore
-        </text>
-        <g transform="translate(380, 8) scale(1.6)">
-          <path
-            d="M 20 80 A 60 60 0 0 1 50 29.6"
-            stroke="#fb923c"
-            strokeWidth="16"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            d="M 50 29.6 A 60 60 0 0 1 110 29.6"
-            stroke="#ef4444"
-            strokeWidth="16"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            d="M 110 29.6 A 60 60 0 0 1 140 80"
-            stroke={VRIKA_PURPLE}
-            strokeWidth="16"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            d="M 60 80 L 72 92 L 104 60"
-            stroke={VRIKA_PURPLE}
-            strokeWidth="8"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </g>
-      </svg>
+        ThreatScore
+      </span>
     );
   }
 
