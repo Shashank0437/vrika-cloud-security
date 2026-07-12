@@ -75,11 +75,14 @@ interface ProviderCredentialsResponse {
 /**
  * Create a new lighthouse provider configuration
  */
-export const createLighthouseProvider = async (config: {
-  provider_type: LighthouseProvider;
-  credentials: ProviderCredentials;
-  base_url?: string;
-}) => {
+export const createLighthouseProvider = async (
+  config: {
+    provider_type: LighthouseProvider;
+    credentials: ProviderCredentials;
+    base_url?: string;
+  },
+  options?: { revalidate?: boolean },
+) => {
   const headers = await getAuthHeaders({ contentType: true });
   const url = new URL(`${apiBaseUrl}/lighthouse/providers`);
 
@@ -122,7 +125,9 @@ export const createLighthouseProvider = async (config: {
       body: JSON.stringify(payload),
     });
 
-    return handleApiResponse(response, "/lighthouse/config");
+    const revalidatePath =
+      options?.revalidate === false ? undefined : "/lighthouse/config";
+    return handleApiResponse(response, revalidatePath);
   } catch (error) {
     return handleApiError(error);
   }
@@ -275,11 +280,14 @@ export const getTenantConfig = async () => {
 /**
  * Update tenant lighthouse configuration
  */
-export const updateTenantConfig = async (config: {
-  default_models?: Record<string, string>;
-  default_provider?: LighthouseProvider;
-  business_context?: string;
-}) => {
+export const updateTenantConfig = async (
+  config: {
+    default_models?: Record<string, string>;
+    default_provider?: LighthouseProvider;
+    business_context?: string;
+  },
+  options?: { revalidate?: boolean },
+) => {
   const headers = await getAuthHeaders({ contentType: true });
   const url = new URL(`${apiBaseUrl}/lighthouse/configuration`);
 
@@ -297,7 +305,9 @@ export const updateTenantConfig = async (config: {
       body: JSON.stringify(payload),
     });
 
-    return handleApiResponse(response, "/lighthouse/config");
+    const revalidatePath =
+      options?.revalidate === false ? undefined : "/lighthouse/config";
+    return handleApiResponse(response, revalidatePath);
   } catch (error) {
     return handleApiError(error);
   }

@@ -58,11 +58,14 @@ async function ensureProviderActive(
   let providerId = existing.data?.id ? String(existing.data.id) : "";
 
   if (!providerId) {
-    const created = await createLighthouseProvider({
-      provider_type: providerType,
-      credentials: { api_key: apiKey },
-      base_url: baseUrl,
-    });
+    const created = await createLighthouseProvider(
+      {
+        provider_type: providerType,
+        credentials: { api_key: apiKey },
+        base_url: baseUrl,
+      },
+      { revalidate: false },
+    );
 
     if (created.errors?.length) {
       const detail = created.errors[0]?.detail || "";
@@ -141,10 +144,13 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
       return true;
     }
 
-    const updated = await updateTenantConfig({
-      default_provider: provider,
-      default_models: { ...currentDefaults, [provider]: model },
-    });
+    const updated = await updateTenantConfig(
+      {
+        default_provider: provider,
+        default_models: { ...currentDefaults, [provider]: model },
+      },
+      { revalidate: false },
+    );
 
     if (updated.errors?.length) {
       throw new Error(
