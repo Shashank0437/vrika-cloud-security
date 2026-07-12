@@ -332,7 +332,6 @@ from tasks.tasks import (
     delete_provider_task,
     delete_tenant_task,
     enqueue_scan_execution_on_commit,
-    generate_vrika_scan_pdf_task,
     get_active_provider_scan,
     jira_integration_task,
     mute_historical_findings_task,
@@ -2767,18 +2766,27 @@ class ScanViewSet(BaseRLSViewSet):
                     tenant_id = str(scan.tenant_id)
                     scan_id = str(scan.id)
                     provider_id = str(scan.provider_id)
-                    transaction.on_commit(
-                        lambda tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id, variant=variant: (
-                            generate_vrika_scan_pdf_task.apply_async(
-                                kwargs={
-                                    "tenant_id": tenant_id,
-                                    "scan_id": scan_id,
-                                    "provider_id": provider_id,
-                                    "variant": variant,
-                                }
-                            )
+
+                    def enqueue_vrika_pdf(
+                        tenant_id=tenant_id,
+                        scan_id=scan_id,
+                        provider_id=provider_id,
+                        variant=variant,
+                    ):
+                        from config.celery import celery_app
+
+                        celery_app.send_task(
+                            "scan-vrika-scan-report",
+                            kwargs={
+                                "tenant_id": tenant_id,
+                                "scan_id": scan_id,
+                                "provider_id": provider_id,
+                                "variant": variant,
+                            },
+                            queue="scan-reports",
                         )
-                    )
+
+                    transaction.on_commit(enqueue_vrika_pdf)
                 label = "executive" if variant == "executive" else "full"
                 return Response(
                     {
