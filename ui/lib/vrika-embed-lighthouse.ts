@@ -69,3 +69,36 @@ export function readEmbedLighthouseEnv() {
 
   return { apiKey, model, provider, baseUrl: resolvedBaseUrl };
 }
+
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+export function isOpenRouterApiKey(apiKey?: string): boolean {
+  return apiKey?.startsWith("sk-or-") ?? false;
+}
+
+/** OpenRouter keys must use openai_compatible + base URL, not the OpenAI endpoint. */
+export function resolveOpenRouterLlmRouting(
+  provider: LighthouseProvider,
+  apiKey: string | undefined,
+  baseUrl: string | undefined,
+): { provider: LighthouseProvider; baseUrl: string | undefined } {
+  const useOpenRouter =
+    isOpenRouterApiKey(apiKey) || baseUrl?.includes("openrouter.ai") === true;
+
+  if (useOpenRouter && provider === "openai") {
+    return {
+      provider: "openai_compatible",
+      baseUrl: baseUrl || OPENROUTER_BASE_URL,
+    };
+  }
+
+  if (
+    provider === "openai_compatible" &&
+    !baseUrl &&
+    isOpenRouterApiKey(apiKey)
+  ) {
+    return { provider, baseUrl: OPENROUTER_BASE_URL };
+  }
+
+  return { provider, baseUrl };
+}

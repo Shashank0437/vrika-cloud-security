@@ -101,10 +101,6 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
     return false;
   }
 
-  if (await isLighthouseConfigured()) {
-    return true;
-  }
-
   const { apiKey, model, provider, baseUrl } = readEmbedLighthouseEnv();
   if (!apiKey) {
     console.error(
@@ -122,13 +118,12 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
     const currentDefaults =
       tenantConfig?.data?.attributes?.default_models ?? {};
     const currentProvider =
-      tenantConfig?.data?.attributes?.default_provider ?? provider;
+      tenantConfig?.data?.attributes?.default_provider ?? "";
 
-    if (
-      currentProvider === provider &&
-      currentDefaults[provider] === model &&
-      tenantConfig?.data
-    ) {
+    const needsTenantSync =
+      currentProvider !== provider || currentDefaults[provider] !== model;
+
+    if (!needsTenantSync && tenantConfig?.data) {
       return true;
     }
 
