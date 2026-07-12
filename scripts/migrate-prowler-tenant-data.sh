@@ -854,16 +854,19 @@ migrate_neo4j() {
   relabel_neo4j_graph "$source" "$target" "$dst_db"
 }
 
-run_neo4j_only() {
-  local source="${SOURCE_TENANT_ID:-}"
-  local target="${TARGET_TENANT_ID:-}"
+run_attack_paths_verify() {
+  local target="${1:-${TARGET_TENANT_ID:-}}"
+  local dst_db dst_nodes
 
-  if [[ -z "$source" || -z "$target" ]]; then
-    echo "Set SOURCE_TENANT_ID and TARGET_TENANT_ID environment variables." >&2
+  if [[ -z "$target" ]]; then
+    echo "Set TARGET_TENANT_ID." >&2
     exit 1
   fi
 
-  migrate_neo4j "$source" "$target"
+  dst_db="db-tenant-$(lowercase_uuid "$target")"
+
+  echo "=== Docker service status ==="
+  "${COMPOSE[@]}" ps neo4j api worker worker-beat 2>/dev/null || true
 
   echo ""
   echo "=== Attack paths scan rows on TARGET ==="
@@ -876,12 +879,43 @@ run_neo4j_only() {
     LIMIT 10;
   "
 
-  local dst_db dst_nodes
-  dst_db="db-tenant-$(lowercase_uuid "$target")"
+  neo4j_ensure_server_running
   dst_nodes="$(neo4j_node_count "$dst_db")"
-  echo "Target Neo4j nodes ($dst_db): $dst_nodes"
   echo ""
-  echo "Done. Hard-refresh Attack Paths in Vrika and re-run a query."
+  echo "Target Neo4j nodes ($dst_db): $dst_nodes"
+
+  if ! neo4j_server_running; then
+    echo "ERROR: Neo4j container is not running." >&2
+    exit 1
+  fi
+  if ! "${COMPOSE[@]}" ps api --status running -q 2>/dev/null | grep -q .; then
+    echo "ERROR: Prowler API is not running (Attack Paths queries will 503)." >&2
+    echo "  Fix: docker compose -f docker-compose.yml -f docker-compose.vrika.yml start api worker worker-beat" >&2
+    exit 1
+  fi
+  if [[ "$dst_nodes" == "0" ]]; then
+    echo "ERROR: Target Neo4j graph is empty. Attack path queries need migrated graph data." >&2
+    echo "  Fix: SOURCE_TENANT_ID=... TARGET_TENANT_ID=$target bash scripts/migrate-prowler-tenant-data.sh neo4j" >&2
+    exit 1
+  fi
+
+  echo ""
+  echo "Attack paths prerequisites look OK. Hard-refresh and retry a query."
+}
+
+run_neo4j_only() {
+  local source="${SOURCE_TENANT_ID:-}"
+  local target="${TARGET_TENANT_ID:-}"
+
+  if [[ -z "$source" || -z "$target" ]]; then
+    echo "Set SOURCE_TENANT_ID and TARGET_TENANT_ID environment variables." >&2
+    exit 1
+  fi
+
+  migrate_neo4j "$source" "$target"
+
+  echo ""
+  run_attack_paths_verify "$target"
 }
 
 run_migrate() {
@@ -945,8 +979,11 @@ case "$MODE" in
   neo4j|attack-paths|attack_paths)
     run_neo4j_only
     ;;
+  verify|verify-attack-paths)
+    run_attack_paths_verify
+    ;;
   *)
-    echo "Usage: $0 {diag|migrate|backfill|neo4j}" >&2
+    echo "Usage: $0 {diag|migrate|backfill|neo4j|verify}" >&2
     exit 1
     ;;
 esac
