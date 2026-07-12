@@ -31,6 +31,17 @@ export interface RuntimeConfig {
   currentData?: string;
 }
 
+function hasStoredCredentials(
+  credentials: Awaited<
+    ReturnType<typeof getProviderCredentials>
+  >["credentials"],
+): boolean {
+  if ("access_key_id" in credentials && credentials.access_key_id) {
+    return true;
+  }
+  return "api_key" in credentials && Boolean(credentials.api_key);
+}
+
 /**
  * Truncate description to specified length
  */
@@ -176,11 +187,7 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
   const providerConfig = await getProviderCredentials(providerType);
   let { credentials, base_url: baseUrl } = providerConfig;
 
-  if (
-    isVrikaEmbedMode() &&
-    !credentials.api_key &&
-    !credentials.access_key_id
-  ) {
+  if (isVrikaEmbedMode() && !hasStoredCredentials(credentials)) {
     const embed = readEmbedLighthouseEnv();
     if (embed.apiKey) {
       credentials = { api_key: embed.apiKey };
