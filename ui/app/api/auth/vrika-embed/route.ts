@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { signIn } from "@/auth.config";
 import { getSafeCallbackPathFromValue } from "@/lib/auth-callback-url";
-import { withAppPath } from "@/lib/base-path";
+import { withAppPath, appBasePath } from "@/lib/base-path";
 import { baseUrl } from "@/lib/helper";
 import { verifyVrikaEmbedToken } from "@/lib/vrika-embed-token";
 
@@ -24,18 +24,25 @@ export async function GET(req: Request) {
   }
 
   try {
+    const destPath =
+      redirectPath === "/"
+        ? withAppPath("/")
+        : redirectPath.startsWith(appBasePath)
+          ? redirectPath
+          : withAppPath(redirectPath);
+
     const result = await signIn("social-oauth", {
       accessToken: payload.access,
       refreshToken: payload.refresh,
       redirect: false,
-      callbackUrl: new URL(redirectPath, baseUrl).toString(),
+      callbackUrl: new URL(destPath, req.url).toString(),
     });
 
     if (result?.error) {
       throw new Error(result.error);
     }
 
-    return NextResponse.redirect(new URL(redirectPath, baseUrl));
+    return NextResponse.redirect(new URL(destPath, req.url));
   } catch (error) {
     console.error("Vrika embed authentication failed:", error);
     return NextResponse.redirect(new URL(withAppPath("/sign-in"), baseUrl));
