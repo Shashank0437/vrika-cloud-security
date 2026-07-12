@@ -25,7 +25,7 @@ export function ContentLayout({
   return (
     <>
       <Navbar title={title} icon={icon} onboardingAction={onboardingAction} />
-      <div className={cn("py-4 pr-6", embedMode && "py-0 pr-0")}>
+      <div className={cn("py-4 pr-6", embedMode && "pt-4 pr-4 pb-4 pl-6")}>
         {children}
       </div>
     </>
