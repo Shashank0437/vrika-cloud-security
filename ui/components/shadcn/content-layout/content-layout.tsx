@@ -4,6 +4,8 @@ import {
   Navbar,
   type OnboardingActionConfig,
 } from "@/components/layout/nav-bar/navbar";
+import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 interface ContentLayoutProps {
   title: string;
@@ -18,10 +20,14 @@ export function ContentLayout({
   onboardingAction,
   children,
 }: ContentLayoutProps) {
+  const embedMode = isVrikaEmbedMode();
+
   return (
     <>
       <Navbar title={title} icon={icon} onboardingAction={onboardingAction} />
-      <div className="py-4 pr-6">{children}</div>
+      <div className={cn("py-4 pr-6", embedMode && "py-0 pr-0")}>
+        {children}
+      </div>
     </>
   );
 }

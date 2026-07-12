@@ -82,6 +82,12 @@ export function NavbarClient({
     router.push(`${flow.route}${separator}onboarding=${flow.id}`);
   };
 
+  const embedMode = isVrikaEmbedMode();
+
+  if (embedMode) {
+    return null;
+  }
+
   return (
     <header className="sticky top-0 z-10 w-full pt-4 backdrop-blur-sm">
       <div className="flex h-14 items-center pr-6">

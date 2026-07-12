@@ -18,6 +18,10 @@ interface NavbarProps {
 }
 
 export function Navbar({ title, icon, onboardingAction }: NavbarProps) {
+  if (isVrikaEmbedMode()) {
+    return null;
+  }
+
   return (
     <NavbarClient
       title={title}

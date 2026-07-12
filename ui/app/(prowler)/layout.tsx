@@ -17,6 +17,7 @@ import { RuntimePublicConfig } from "@/components/runtime-config/runtime-public-
 import { NavigationProgress } from "@/components/shadcn/navigation-progress";
 import { Toaster } from "@/components/shadcn/toast";
 import { TaskPollingWatcher } from "@/components/shared/task-polling-watcher";
+import { VrikaParentBridge } from "@/components/vrika/vrika-parent-bridge";
 import { fontMono, fontSans } from "@/config/fonts";
 import { siteConfig } from "@/config/site";
 import { isCloud } from "@/lib/shared/env";
@@ -108,6 +109,7 @@ export default async function RootLayout({
           <Suspense>
             <NavigationProgress />
           </Suspense>
+          {embedMode && <VrikaParentBridge />}
           {/* Store uses boolean; gate receives tri-state to fail open on fetch errors. */}
           <StoreInitializer values={{ hasProviders: hasProviders ?? false }} />
           {onboardingEnabled && (
