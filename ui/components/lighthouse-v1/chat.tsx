@@ -133,6 +133,14 @@ export const Chat = ({
 
   // Initialize selectedModel with defaults from props
   const [selectedModel, setSelectedModel] = useState<SelectedModel>(() => {
+    if (modelSelectorHidden && defaultProviderId && defaultModelId) {
+      return {
+        providerType: defaultProviderId,
+        modelId: defaultModelId,
+        modelName: defaultModelId,
+      };
+    }
+
     const defaultProvider =
       initialProviders.find((p) => p.id === defaultProviderId) ||
       initialProviders[0];
@@ -141,9 +149,9 @@ export const Chat = ({
       defaultProvider?.models[0];
 
     return {
-      providerType: defaultProvider?.id || "",
-      modelId: defaultModel?.id || "",
-      modelName: defaultModel?.name || "",
+      providerType: defaultProvider?.id || defaultProviderId || "",
+      modelId: defaultModel?.id || defaultModelId || "",
+      modelName: defaultModel?.name || defaultModelId || "",
     };
   });
 

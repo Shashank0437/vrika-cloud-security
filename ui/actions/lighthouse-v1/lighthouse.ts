@@ -6,6 +6,7 @@ import {
   validateCredentials,
 } from "@/lib/lighthouse-v1/validation";
 import { handleApiError, handleApiResponse } from "@/lib/server-actions-helper";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import {
   type LighthouseProvider,
   PROVIDER_DISPLAY_NAMES,
@@ -572,7 +573,32 @@ export const getLighthouseProvidersConfig = async () => {
     );
 
     // Filter out providers with no models
-    const validProviders = providersConfig.filter((p) => p.models.length > 0);
+    let validProviders = providersConfig.filter((p) => p.models.length > 0);
+
+    // Embed: model list may be empty when async refresh was skipped — use tenant defaults.
+    if (
+      isVrikaEmbedMode() &&
+      validProviders.length === 0 &&
+      activeProviders.length > 0
+    ) {
+      validProviders = activeProviders
+        .map((provider: LighthouseProviderResource) => {
+          const providerType = provider.attributes
+            .provider_type as LighthouseProvider;
+          const modelId = defaultModels[providerType];
+          if (!modelId) {
+            return null;
+          }
+          return {
+            id: providerType,
+            name: PROVIDER_DISPLAY_NAMES[providerType],
+            models: [{ id: modelId, name: modelId }],
+          };
+        })
+        .filter((provider): provider is NonNullable<typeof provider> =>
+          Boolean(provider),
+        );
+    }
 
     return {
       providers: validProviders,

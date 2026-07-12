@@ -21,6 +21,8 @@ import {
 import { loadSkill } from "@/lib/lighthouse-v1/tools/load-skill";
 import { describeTool, executeTool } from "@/lib/lighthouse-v1/tools/meta-tool";
 import { getModelParams } from "@/lib/lighthouse-v1/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { readEmbedLighthouseEnv } from "@/lib/vrika-embed-lighthouse";
 
 export interface RuntimeConfig {
   model?: string;
@@ -166,13 +168,25 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
   const defaultModels = tenantConfig?.default_models || {};
   const defaultModel = defaultModels[defaultProvider] || "gpt-5.2";
 
-  const providerType = (runtimeConfig?.provider ||
+  const providerType = (runtimeConfig?.provider?.trim() ||
     defaultProvider) as ProviderType;
-  const modelId = runtimeConfig?.model || defaultModel;
+  const modelId = runtimeConfig?.model?.trim() || defaultModel;
 
-  // Get credentials
+  // Get credentials from tenant provider store; embed mode falls back to platform env.
   const providerConfig = await getProviderCredentials(providerType);
-  const { credentials, base_url: baseUrl } = providerConfig;
+  let { credentials, base_url: baseUrl } = providerConfig;
+
+  if (
+    isVrikaEmbedMode() &&
+    !credentials.api_key &&
+    !credentials.access_key_id
+  ) {
+    const embed = readEmbedLighthouseEnv();
+    if (embed.apiKey) {
+      credentials = { api_key: embed.apiKey };
+      baseUrl = baseUrl || embed.baseUrl;
+    }
+  }
 
   // Get model params
   const modelParams = getModelParams({ model: modelId });
