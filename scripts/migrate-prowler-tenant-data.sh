@@ -607,24 +607,54 @@ neo4j_drop_database() {
 neo4j_copy_database_admin() {
   local src_db="$1"
   local dst_db="$2"
+  local dump_dir="/data/migrate-dumps/tenant-copy-$$"
 
-  echo "Stopping Neo4j databases for offline copy..."
+  echo "Stopping Neo4j databases for offline dump/load..."
   neo4j_stop_database "$dst_db"
   neo4j_stop_database "$src_db"
 
-  echo "Copying Neo4j store $src_db -> $dst_db via neo4j-admin ..."
-  if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database copy \
-    --from-database="$src_db" \
-    --to-database="$dst_db" \
-    --overwrite-destination=true \
-    --verbose; then
+  "${COMPOSE[@]}" exec -T neo4j mkdir -p "$dump_dir"
+
+  echo "Dumping $src_db to $dump_dir ..."
+  if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database dump \
+    --expand-commands "$src_db" --to-path="$dump_dir"; then
+    echo "neo4j-admin database dump failed." >&2
     neo4j_start_database "$src_db"
+    "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+    return 1
+  fi
+
+  echo "Renaming dump archive for target database name ..."
+  if ! "${COMPOSE[@]}" exec -T neo4j sh -c "
+    set -e
+    src_dump='$dump_dir/${src_db}.dump'
+    dst_dump='$dump_dir/${dst_db}.dump'
+    rm -f \"\$dst_dump\"
+    if [ ! -f \"\$src_dump\" ]; then
+      echo \"Dump file not found: \$src_dump\" >&2
+      ls -la '$dump_dir' >&2
+      exit 1
+    fi
+    mv \"\$src_dump\" \"\$dst_dump\"
+  "; then
+    neo4j_start_database "$src_db"
+    "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
+    return 1
+  fi
+
+  echo "Loading $dst_db from dump ..."
+  if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database load \
+    --expand-commands "$dst_db" --from-path="$dump_dir" --overwrite-destination=true; then
+    echo "neo4j-admin database load failed." >&2
+    neo4j_start_database "$src_db"
+    "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
     return 1
   fi
 
   neo4j_cypher system "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>/dev/null || true
   neo4j_start_database "$src_db"
   neo4j_start_database "$dst_db"
+  "${COMPOSE[@]}" exec -T neo4j rm -rf "$dump_dir" 2>/dev/null || true
 }
 
 relabel_neo4j_graph() {
@@ -706,6 +736,11 @@ migrate_neo4j() {
 
   echo "=== Neo4j attack-path graphs: $src_db -> $dst_db ==="
 
+  # Recover if a previous copy attempt left databases stopped.
+  neo4j_start_database "$src_db"
+  neo4j_start_database "$dst_db"
+  sleep 2
+
   if [[ "$(neo4j_db_exists "$src_db")" == "0" ]]; then
     echo "No source Neo4j database ($src_db)."
     if [[ "$(neo4j_db_exists "$dst_db")" != "0" ]]; then
@@ -738,11 +773,11 @@ migrate_neo4j() {
     neo4j_drop_database "$dst_db"
   fi
 
-  if neo4j_copy_database_admin "$src_db" "$dst_db"; then
-    echo "Neo4j database copied successfully."
-  elif "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
+  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
     "CREATE DATABASE \`$dst_db\` AS COPY OF \`$src_db\`;" 2>/dev/null; then
     echo "Neo4j database copied via CREATE DATABASE AS COPY OF."
+  elif neo4j_copy_database_admin "$src_db" "$dst_db"; then
+    echo "Neo4j database copied successfully via dump/load."
   else
     echo "WARNING: Could not auto-copy Neo4j graph." >&2
     echo "  Run manually on the server:" >&2
