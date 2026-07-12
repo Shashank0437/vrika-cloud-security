@@ -1,4 +1,4 @@
-import { stripAppPath, withAppPath } from "@/lib/base-path";
+import { stripAppPath } from "@/lib/base-path";
 
 export const VRIKA_NAVIGATE_MESSAGE = "vrika:navigate" as const;
 export const VRIKA_PATHNAME_MESSAGE = "vrika:pathname" as const;
@@ -29,9 +29,9 @@ export function normalizeBridgePath(path: string): string {
   return stripAppPath(withSlash.split("#")[0] ?? withSlash);
 }
 
+/** Path for `router.push` — must NOT include `NEXT_PUBLIC_BASE_PATH` (Next adds it). */
 export function toAppRouterPath(path: string): string {
-  const normalized = normalizeBridgePath(path);
-  return normalized === "/" ? withAppPath("/") : withAppPath(normalized);
+  return normalizeBridgePath(path);
 }
 
 export function postPathnameToParent(pathname: string): void {

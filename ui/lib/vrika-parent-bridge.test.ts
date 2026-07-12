@@ -16,7 +16,7 @@ describe("vrika-parent-bridge", () => {
     ).toBe("/findings?filter[muted]=false&filter[status__in]=FAIL");
   });
 
-  it("maps bridge paths to app router paths", () => {
+  it("maps bridge paths to app router paths without base path prefix", () => {
     expect(toAppRouterPath("/compliance")).toBe("/compliance");
     expect(toAppRouterPath("/")).toBe("/");
   });
