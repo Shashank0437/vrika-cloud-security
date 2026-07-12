@@ -1445,6 +1445,7 @@ def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: 
     name="scan-vrika-scan-report",
     queue="scan-reports",
 )
+@set_tenant(keep_tenant=True)
 @handle_provider_deletion
 def generate_vrika_scan_pdf_task(
     tenant_id: str, scan_id: str, provider_id: str, variant: str
@@ -1465,6 +1466,7 @@ def generate_vrika_scan_pdf_task(
     name="scan-vrika-full-report",
     queue="scan-reports",
 )
+@set_tenant(keep_tenant=True)
 @handle_provider_deletion
 def generate_vrika_full_pdf_task(tenant_id: str, scan_id: str, provider_id: str):
     """On-demand Celery task for the Vrika full scan PDF."""

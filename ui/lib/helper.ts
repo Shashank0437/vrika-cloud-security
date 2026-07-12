@@ -201,7 +201,7 @@ export const downloadScanExecutivePdf = async (
     description: "Preparing the Vrika executive PDF report.",
   });
 
-  const maxAttempts = 40;
+  const maxAttempts = 80;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const result = await getVrikaScanPdfReport(scanId, "executive");
 
@@ -248,7 +248,7 @@ export const downloadScanFullPdf = async (
       "Preparing the full Vrika PDF report. Large scans may take a few minutes.",
   });
 
-  const maxAttempts = 40;
+  const maxAttempts = 80;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const result = await getVrikaScanPdfReport(scanId, "full");
 

@@ -1393,6 +1393,46 @@ def generate_compliance_reports_job(
     )
 
 
+def _vrika_report_path_prefix(
+    tenant_id: str,
+    scan_id: str,
+    provider_uid: str,
+) -> str:
+    """
+    Build the Vrika PDF filename prefix where download endpoints look.
+
+    When a scan already has a local ``output_location``, write under that scan
+    directory so ``ScanViewSet._serve_vrika_scan_pdf`` can find the artifact.
+    Otherwise fall back to the standard tmp layout (S3 / not-yet-materialized).
+    """
+    from prowler.config.config import set_output_timestamp
+
+    with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
+        scan = Scan.objects.get(id=scan_id, tenant_id=tenant_id)
+        started_at = scan.started_at
+        output_location = scan.output_location or ""
+
+    prowler_provider_sanitized = re.sub(r"[^\w\-]", "-", provider_uid)
+    set_output_timestamp(started_at)
+    timestamp = started_at.strftime("%Y%m%d%H%M%S") if started_at else "unknown"
+
+    if output_location and not output_location.startswith("s3://"):
+        scan_base = Path(output_location).resolve().parent
+        vrika_dir = scan_base / "vrika"
+        vrika_dir.mkdir(parents=True, exist_ok=True)
+        return str(
+            vrika_dir / f"prowler-output-{prowler_provider_sanitized}-{timestamp}"
+        )
+
+    return _generate_compliance_output_directory(
+        DJANGO_TMP_OUTPUT_DIRECTORY,
+        provider_uid,
+        tenant_id,
+        scan_id,
+        compliance_framework="vrika",
+    )
+
+
 def generate_vrika_scan_pdf_job(
     tenant_id: str,
     scan_id: str,
@@ -1415,13 +1455,7 @@ def generate_vrika_scan_pdf_job(
             provider_obj = Provider.objects.get(id=provider_id)
             provider_uid = provider_obj.uid
 
-        vrika_dir = _generate_compliance_output_directory(
-            DJANGO_TMP_OUTPUT_DIRECTORY,
-            provider_uid,
-            tenant_id,
-            scan_id,
-            compliance_framework="vrika",
-        )
+        vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid)
         suffix = "executive" if variant == "executive" else "full"
         pdf_path = f"{vrika_dir}_{suffix}_report.pdf"
         generator = (
