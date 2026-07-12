@@ -5,10 +5,23 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="/etc/nginx/sites-available/nyxstrike"
 ENABLED="/etc/nginx/sites-enabled/nyxstrike"
 SNIPPET="$ROOT/nyxstrike-prowler.conf.snippet"
+CLEAN="$ROOT/nyxstrike.conf.clean"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Re-run with sudo: sudo bash $0"
   exit 1
+fi
+
+if [[ "${1:-}" == "--full" ]]; then
+  if [[ ! -f "$CLEAN" ]]; then
+    echo "Missing $CLEAN — git pull first."
+    exit 1
+  fi
+  install -m 0644 "$CLEAN" "$TARGET"
+  install -m 0644 "$CLEAN" "$ENABLED"
+  nginx -t && systemctl reload nginx
+  echo "Installed full nyxstrike config from nyxstrike.conf.clean"
+  exit 0
 fi
 
 python3 - "$TARGET" "$SNIPPET" <<'PY'
@@ -39,17 +52,38 @@ if old_marker in content:
                         break
             content = content[:start] + content[end:]
 
-# Remove all prowler-related location blocks (duplicates + old wrong config)
-patterns = [
-    r"\n\s*location = /prowler \{[^}]*\}\n",
-    r"\n\s*# VRIKA_PROWLER_443[^\n]*\n",
+# Remove every marked Prowler block (handles partial duplicates from prior runs)
+start_marker = "# --- Prowler"
+end_marker = "# --- end Prowler ---"
+while start_marker in content:
+    start = content.find(start_marker)
+    end = content.find(end_marker, start)
+    if end == -1:
+        break
+    end += len(end_marker)
+    if end < len(content) and content[end] == "\n":
+        end += 1
+    content = content[:start] + content[end:]
+
+# Remove any leftover prowler-related location blocks (unmarked fragments)
+location_patterns = [
+    r"\n\s*# Legacy shim: old UI builds[^\n]*\n",
+    r"\n\s*# IMPORTANT: proxy /prowler[^\n]*\n",
+    r"\n\s*# Django REST API only[^\n]*\n",
+    r"\n\s*location \^~ /api/auth/ \{.*?\n    \}\n",
+    r"\n\s*location = /prowler \{.*?\n    \}\n",
+    r"\n\s*location \^~ /prowler/api/auth/ \{.*?\n    \}\n",
+    r"\n\s*location = /prowler/api/health \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/api/v1/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/api/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/accounts/saml/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/ \{.*?\n    \}\n",
 ]
-for pat in patterns:
-    content = re.sub(pat, "\n", content, flags=re.DOTALL)
+for pat in location_patterns:
+    prev = None
+    while prev != content:
+        prev = content
+        content = re.sub(pat, "\n", content, flags=re.DOTALL)
 
 anchor = "    location / {"
 listen = content.find("listen 443")
@@ -69,3 +103,4 @@ fi
 
 nginx -t && systemctl reload nginx
 echo "OK: https://192.168.9.188/prowler/"
+echo "If duplicates remain, run: sudo bash $0 --full"
