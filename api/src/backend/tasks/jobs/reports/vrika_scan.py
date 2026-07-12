@@ -63,6 +63,8 @@ logger = get_task_logger(__name__)
 SEVERITY_ORDER = ("critical", "high", "medium", "low", "informational")
 TOP_RISKS_LIMIT = 15
 FRAMEWORK_CARD_LIMIT = 12
+# AWS ships 80+ compliance frameworks; scanning all of them stalls the worker.
+MAX_FRAMEWORKS_TO_SCAN = 30
 APPENDIX_CHECKS_PER_DOMAIN = 25
 APPENDIX_DOMAIN_LIMIT = 15
 
@@ -199,7 +201,16 @@ def _load_framework_cards(
     frameworks = Compliance.get_bulk(provider_type)
     cards: list[FrameworkCard] = []
 
-    for compliance_id, compliance_obj in frameworks.items():
+    # Prefer well-known frameworks, then scan a bounded subset (not all 80+).
+    def _framework_rank(compliance_id: str) -> tuple[int, str]:
+        config = get_framework_config(compliance_id)
+        if config is not None:
+            return (0, compliance_id)
+        return (1, compliance_id)
+
+    ranked_ids = sorted(frameworks.keys(), key=_framework_rank)
+    for compliance_id in ranked_ids[:MAX_FRAMEWORKS_TO_SCAN]:
+        compliance_obj = frameworks[compliance_id]
         _, requirements = _calculate_requirements_data_from_statistics(
             compliance_obj, stats
         )
