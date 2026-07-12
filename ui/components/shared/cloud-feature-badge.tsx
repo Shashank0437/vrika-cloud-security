@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 interface MenuFeatureBadgeProps {
   label?: string;
@@ -25,7 +26,9 @@ const FEATURE_BADGE_VARIANT_CLASS: Record<
   string
 > = {
   cloud: "text-black",
-  new: "bg-emerald-500 text-white",
+  new: isVrikaEmbedMode()
+    ? "bg-[#684cb6] text-white"
+    : "bg-emerald-500 text-white",
 };
 
 const FEATURE_BADGE_SIZE_CLASS: Record<

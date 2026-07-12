@@ -1,5 +1,6 @@
 "use client";
 
+import { ScanLine } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,8 +22,8 @@ import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 import { SIDEBAR_NAVIGATION_MODE, useSidebar } from "@/hooks/use-sidebar";
 import { getMenuList } from "@/lib/menu-list";
 import { LAUNCH_SCAN_HREF } from "@/lib/scans-navigation";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { useScansStore } from "@/store";
 import { GroupProps } from "@/types";
 import { RolePermissionAttributes } from "@/types/users";
@@ -216,9 +217,16 @@ export const Menu = ({ isOpen }: { isOpen: boolean }) => {
 };
 
 function LaunchScanButtonContent({ isOpen }: { isOpen: boolean }) {
+  const embedMode = isVrikaEmbedMode();
+
   return (
-    <span className={cn("flex items-center", isOpen && "gap-2.5")}>
-      <ProwlerShort aria-hidden="true" className="size-5 text-current" />
+    <span className={cn("flex items-center text-white", isOpen && "gap-2.5")}>
+      {!embedMode && (
+        <ProwlerShort aria-hidden="true" className="size-5 text-current" />
+      )}
+      {embedMode && !isOpen && (
+        <ScanLine aria-hidden="true" className="size-5 text-current" />
+      )}
       {isOpen && <span className="text-xl leading-8">Scan</span>}
     </span>
   );

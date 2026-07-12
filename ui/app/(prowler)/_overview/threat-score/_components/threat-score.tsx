@@ -8,6 +8,7 @@ import type {
 } from "@/actions/overview/threat-score";
 import { RadialChart } from "@/components/graphs/radial-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 // CSS variables are required here as they're passed to RadialChart component
 // which uses Recharts library that needs actual color values, not Tailwind classes
@@ -109,6 +110,8 @@ export function ThreatScore({
 
   // Extract top gaps from critical requirements
   const gaps = extractTopGaps(criticalRequirements, 2);
+  const embedMode = isVrikaEmbedMode();
+  const threatScoreLabel = embedMode ? "ThreatScore" : "Prowler ThreatScore";
 
   return (
     <Card
@@ -116,7 +119,7 @@ export function ThreatScore({
       className="flex min-h-[372px] w-full flex-col justify-between lg:max-w-[312px]"
     >
       <CardHeader>
-        <CardTitle>Prowler ThreatScore</CardTitle>
+        <CardTitle>{threatScoreLabel}</CardTitle>
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col justify-between space-y-4">
@@ -164,7 +167,7 @@ export function ThreatScore({
                       className="mt-0.5 min-h-4 min-w-4 shrink-0"
                     />
                     <p>
-                      Prowler ThreatScore has{" "}
+                      {threatScoreLabel} has{" "}
                       {scoreDelta > 0 ? "improved" : "decreased"} by{" "}
                       {Math.abs(scoreDelta)}%
                     </p>
@@ -193,7 +196,7 @@ export function ThreatScore({
             className="items-center justify-center"
           >
             <p className="text-text-neutral-secondary text-sm">
-              Prowler ThreatScore Data Unavailable
+              {threatScoreLabel} Data Unavailable
             </p>
           </Card>
         )}

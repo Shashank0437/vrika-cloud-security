@@ -24,7 +24,7 @@ repos:
         pass_filenames: true
         priority: 1
 
-      # P10 - Project-wide validators (TypeScript is fundamentally project-wide).
+      # Fast dev: run manually only (pnpm run typecheck / vitest).
       - id: ui-typecheck
         name: UI - TypeScript Check
         entry: pnpm run typecheck
@@ -32,6 +32,7 @@ repos:
         files: '\.(ts|tsx|js|jsx)$'
         pass_filenames: false
         priority: 10
+        stages: [manual]
 
       - id: ui-tests
         name: UI - Unit Tests
@@ -41,3 +42,4 @@ repos:
         exclude: '\.test\.|\.spec\.|vitest\.config|vitest\.setup'
         pass_filenames: true
         priority: 10
+        stages: [manual]

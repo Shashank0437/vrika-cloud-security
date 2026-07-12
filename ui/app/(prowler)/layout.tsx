@@ -19,8 +19,8 @@ import { TaskPollingWatcher } from "@/components/shared/task-polling-watcher";
 import { fontMono, fontSans } from "@/config/fonts";
 import { siteConfig } from "@/config/site";
 import { isCloud } from "@/lib/shared/env";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { StoreInitializer } from "@/store/ui/store-initializer";
 import { SCAN_STATES } from "@/types/attack-paths";
 
@@ -77,11 +77,13 @@ export default async function RootLayout({
       : undefined;
   }
 
+  const embedMode = isVrikaEmbedMode();
+
   return (
     <html
       suppressHydrationWarning
       lang="en"
-      {...(isVrikaEmbedMode() ? { "data-vrika-embed": "true" } : {})}
+      {...(embedMode ? { "data-vrika-embed": "true" } : {})}
     >
       <head>
         <RuntimePublicConfig />
@@ -94,7 +96,14 @@ export default async function RootLayout({
           fontMono.variable,
         )}
       >
-        <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
+        <Providers
+          themeProps={{
+            attribute: "class",
+            defaultTheme: embedMode ? "light" : "dark",
+            forcedTheme: embedMode ? "light" : undefined,
+            enableSystem: !embedMode,
+          }}
+        >
           {/* Suspense contains the useSearchParams() CSR bailout so statically
               prerendered pages don't fail the build (matches the auth layout). */}
           <Suspense>

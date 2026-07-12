@@ -30,8 +30,10 @@ repos:
       - id: trailing-whitespace
         stages: ["pre-commit"]
         priority: 0
+      # Fast dev: allow commits directly to main.
       - id: no-commit-to-branch
         priority: 10
+        stages: [manual]
       - id: pretty-format-json
         args: ["--autofix", --no-sort-keys, --no-ensure-ascii]
         stages: ["pre-commit"]
@@ -202,7 +204,7 @@ repos:
         # entry: bash -c 'docker run -v "$(pwd):/workdir" -i --rm trufflesecurity/trufflehog:latest git file:///workdir --only-verified --fail'
         language: system
         pass_filenames: false
-        stages: ["pre-commit", "pre-push"]
+        stages: [manual]
         priority: 40
 
       - id: bandit

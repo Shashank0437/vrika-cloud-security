@@ -620,19 +620,34 @@ html[data-vrika-embed="true"] {
   --bg-neutral-secondary: #ffffff;
   --bg-neutral-tertiary: #f6f5ff;
   --bg-tag-primary: #ebe9f4;
+  --bg-pass-primary: #684cb6;
+  --bg-pass-secondary: #f6f5ff;
   --text-neutral-primary: #1b1b21;
   --text-neutral-secondary: #45464f;
   --border-neutral-primary: #c6c5d0;
   --bg-radar-button: #684cb6;
+  --gradient-lighthouse: linear-gradient(96deg, #684cb6 3.55%, #8b7ec8 98.85%);
   --shadow-progress-glow: 0 0 10px #684cb6, 0 0 5px #684cb6;
 }
 
-html[data-vrika-embed="true"].dark {
-  --bg-button-primary: #684cb6;
-  --bg-button-primary-hover: #7b5ea7;
-  --bg-button-primary-press: #5b3fa9;
-  --border-input-primary-pressed: #3d2f66;
-  --bg-radar-button: #684cb6;
-  --shadow-progress-glow: 0 0 10px rgba(104, 76, 182, 0.6),
-    0 0 5px rgba(104, 76, 182, 0.4);
+/* White label text on Vrika purple primary buttons */
+html[data-vrika-embed="true"] .bg-button-primary.text-black {
+  color: #ffffff !important;
+}
+
+html[data-vrika-embed="true"] .bg-button-primary.text-black svg {
+  color: #ffffff !important;
+}
+
+/* Replace remaining Prowler green accents with Vrika purple */
+html[data-vrika-embed="true"] .bg-emerald-500 {
+  background-color: #684cb6 !important;
+}
+
+html[data-vrika-embed="true"] .after\:bg-emerald-400::after {
+  background-color: #684cb6 !important;
+}
+
+html[data-vrika-embed="true"] .focus-visible\:ring-emerald-400:focus-visible {
+  --tw-ring-color: #684cb6 !important;
 }

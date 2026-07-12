@@ -11,13 +11,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/shadcn";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useSidebar } from "@/hooks/use-sidebar";
 import { getFlowById } from "@/lib/onboarding";
 import { isCloud } from "@/lib/shared/env";
 import { useTourCompletion } from "@/lib/tours/use-tour-completion";
 import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { useOnboardingReplayStore } from "@/store/onboarding-replay";
 import { usePageReadyStore } from "@/store/page-ready";
 
@@ -128,7 +128,7 @@ export function NavbarClient({
           </Suspense>
         </div>
         <div className="flex flex-1 items-center justify-end gap-3">
-          <ThemeSwitch />
+          {!isVrikaEmbedMode() && <ThemeSwitch />}
           {!isVrikaEmbedMode() && feedsSlot}
           {!isVrikaEmbedMode() && <UserNav />}
         </div>
