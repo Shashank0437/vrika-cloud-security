@@ -19,7 +19,7 @@ const cspHeader = `
   font-src 'self';
   style-src 'self' 'unsafe-inline';
   frame-src 'self' https://js.stripe.com https://www.googletagmanager.com;
-  frame-ancestors 'none';
+  frame-ancestors 'self';
 `;
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
