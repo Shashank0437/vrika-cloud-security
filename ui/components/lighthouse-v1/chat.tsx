@@ -444,15 +444,13 @@ export const Chat = ({
       )}
 
       {messages.length === 0 && !errorMessage && !error ? (
-        <div
-          className={cn(
-            "flex min-h-0 flex-1 px-2 sm:px-4",
-            embedMode
-              ? "flex-col justify-end gap-4 pt-4 pb-2"
-              : "items-center justify-center py-4",
-          )}
-        >
-          <div className="w-full max-w-2xl">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-2 py-4 sm:px-4">
+          <div
+            className={cn(
+              "w-full",
+              embedMode ? "w-[min(100%,60%)]" : "max-w-2xl",
+            )}
+          >
             <h2 className="mb-4 text-center font-sans text-xl">Suggestions</h2>
             <div className="grid gap-2 sm:grid-cols-2">
               {SUGGESTED_ACTIONS.map((action, index) => (
