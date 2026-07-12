@@ -135,7 +135,7 @@ run_diag() {
   done < <(
     "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
       "SHOW DATABASES YIELD name WHERE name STARTS WITH 'db-tenant-' RETURN name ORDER BY name;" \
-      2>/dev/null | tail -n +2 | tr -d ' "'
+      2>/dev/null | grep -oE 'db-tenant-[a-f0-9-]+' || true
   )
 
   cat <<'EOF'
