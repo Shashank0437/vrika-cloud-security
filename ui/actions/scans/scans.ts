@@ -383,9 +383,6 @@ const _fetchScanBinary = async (
 ): Promise<ScanBinaryResult> => {
   const headers = await getAuthHeaders({ contentType: false });
   const url = new URL(`${apiBaseUrl}/scans/${scanId}/${urlPath}`);
-  if (!url.pathname.endsWith("/")) {
-    url.pathname = `${url.pathname}/`;
-  }
 
   try {
     const response = await fetch(url.toString(), { headers });
