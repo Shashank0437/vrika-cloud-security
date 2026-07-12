@@ -8,6 +8,17 @@ import { withAppPath, appBasePath } from "@/lib/base-path";
 import { baseUrl } from "@/lib/helper";
 import { verifyVrikaEmbedToken } from "@/lib/vrika-embed-token";
 
+function publicRedirectUrl(destPath: string): URL {
+  const configured = baseUrl?.trim();
+  if (configured) {
+    const origin = new URL(
+      configured.endsWith("/") ? configured : `${configured}/`,
+    ).origin;
+    return new URL(destPath, origin);
+  }
+  throw new Error("AUTH_URL is not configured");
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
@@ -31,18 +42,20 @@ export async function GET(req: Request) {
           ? redirectPath
           : withAppPath(redirectPath);
 
+    const redirectTarget = publicRedirectUrl(destPath);
+
     const result = await signIn("social-oauth", {
       accessToken: payload.access,
       refreshToken: payload.refresh,
       redirect: false,
-      callbackUrl: new URL(destPath, req.url).toString(),
+      callbackUrl: redirectTarget.toString(),
     });
 
     if (result?.error) {
       throw new Error(result.error);
     }
 
-    return NextResponse.redirect(new URL(destPath, req.url));
+    return NextResponse.redirect(redirectTarget);
   } catch (error) {
     console.error("Vrika embed authentication failed:", error);
     return NextResponse.redirect(new URL(withAppPath("/sign-in"), baseUrl));
