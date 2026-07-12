@@ -16,25 +16,45 @@ import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
 function readEmbedLighthouseEnv() {
   const apiKey =
-    process.env.VRIKA_LIGHTHOUSE_OPENAI_API_KEY?.trim() ||
     process.env.VRIKA_LLM_API_KEY?.trim() ||
+    process.env.VRIKA_LIGHTHOUSE_OPENAI_API_KEY?.trim() ||
     process.env.OPENAI_API_KEY?.trim() ||
     "";
 
-  const model =
-    process.env.VRIKA_LIGHTHOUSE_MODEL?.trim() ||
-    process.env.VRIKA_LLM_MODEL?.trim()?.replace(/^openai\//, "") ||
-    "gpt-4.1-mini";
-
-  const provider = (process.env.VRIKA_LIGHTHOUSE_PROVIDER?.trim() ||
-    "openai") as LighthouseProvider;
-
   const baseUrl =
-    process.env.VRIKA_LIGHTHOUSE_BASE_URL?.trim() ||
     process.env.VRIKA_LLM_URL?.trim() ||
+    process.env.VRIKA_LIGHTHOUSE_BASE_URL?.trim() ||
     undefined;
 
-  return { apiKey, model, provider, baseUrl };
+  const usingOpenRouter =
+    apiKey.startsWith("sk-or-") || baseUrl?.includes("openrouter.ai") === true;
+
+  const provider = (process.env.VRIKA_LIGHTHOUSE_PROVIDER?.trim() ||
+    process.env.VRIKA_LLM_PROVIDER?.trim()?.replace(
+      /^openai$/,
+      "openai_compatible",
+    ) ||
+    (usingOpenRouter || baseUrl
+      ? "openai_compatible"
+      : "openai")) as LighthouseProvider;
+
+  const rawModel =
+    process.env.VRIKA_LLM_MODEL?.trim() ||
+    process.env.VRIKA_LIGHTHOUSE_MODEL?.trim() ||
+    "openai/gpt-4.1-mini";
+
+  const model =
+    provider === "openai" && rawModel.startsWith("openai/")
+      ? rawModel.replace(/^openai\//, "")
+      : rawModel;
+
+  const resolvedBaseUrl =
+    baseUrl ||
+    (provider === "openai_compatible" && usingOpenRouter
+      ? "https://openrouter.ai/api/v1"
+      : undefined);
+
+  return { apiKey, model, provider, baseUrl: resolvedBaseUrl };
 }
 
 async function waitForTask(taskId: string, label: string): Promise<void> {
@@ -122,7 +142,7 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
   const { apiKey, model, provider, baseUrl } = readEmbedLighthouseEnv();
   if (!apiKey) {
     console.error(
-      "[Vrika embed] Lighthouse not configured: set VRIKA_LIGHTHOUSE_OPENAI_API_KEY (or VRIKA_LLM_API_KEY)",
+      "[Vrika embed] Lighthouse not configured: set VRIKA_LLM_API_KEY (or VRIKA_LIGHTHOUSE_OPENAI_API_KEY)",
     );
     return false;
   }
