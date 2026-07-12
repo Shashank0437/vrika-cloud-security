@@ -12,6 +12,9 @@
 #   SOURCE_TENANT_ID=<old-uuid> TARGET_TENANT_ID=<new-uuid> \
 #     bash scripts/migrate-prowler-tenant-data.sh migrate
 #
+#   # Rebuild overview dashboard tables (UI reads scan_summaries, not raw findings):
+#   TARGET_TENANT_ID=<testcorp-uuid> bash scripts/migrate-prowler-tenant-data.sh backfill
+#
 # Optional: skip Neo4j attack-path graph copy (postgres-only migration):
 #   SKIP_NEO4J=1 SOURCE_TENANT_ID=... TARGET_TENANT_ID=... bash scripts/...
 #
@@ -85,6 +88,31 @@ run_diag() {
   "
 
   echo ""
+  echo "=== Findings + overview tables by tenant ==="
+  pg_psql -c "
+    SELECT
+      t.id AS tenant_id,
+      t.name AS tenant_name,
+      (SELECT COUNT(*) FROM findings f WHERE f.tenant_id = t.id) AS findings,
+      (SELECT COUNT(*) FROM scan_summaries ss WHERE ss.tenant_id = t.id) AS scan_summaries,
+      (SELECT COUNT(*) FROM threatscore_snapshots ts WHERE ts.tenant_id = t.id) AS threatscore_snapshots
+    FROM tenants t
+    WHERE EXISTS (SELECT 1 FROM scans s WHERE s.tenant_id = t.id)
+       OR EXISTS (SELECT 1 FROM findings f WHERE f.tenant_id = t.id)
+    ORDER BY findings DESC;
+  "
+
+  echo ""
+  echo "=== Scan states by tenant ==="
+  pg_psql -c "
+    SELECT t.name, s.tenant_id, s.state, COUNT(*) AS count
+    FROM scans s
+    JOIN tenants t ON t.id = s.tenant_id
+    GROUP BY t.name, s.tenant_id, s.state
+    ORDER BY count DESC;
+  "
+
+  echo ""
   echo "=== Neo4j tenant databases ==="
   "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
     "SHOW DATABASES YIELD name, currentStatus, default WHERE name STARTS WITH 'db-tenant-' RETURN name, currentStatus ORDER BY name;" \
@@ -98,7 +126,37 @@ Pick:
 
 Then run:
   SOURCE_TENANT_ID=<source> TARGET_TENANT_ID=<target> bash scripts/migrate-prowler-tenant-data.sh migrate
+
+If DB has scans/findings but UI still shows 0:
+  TARGET_TENANT_ID=<target> bash scripts/migrate-prowler-tenant-data.sh backfill
 EOF
+}
+
+run_backfill() {
+  local target="${TARGET_TENANT_ID:-}"
+  if [[ -z "$target" ]]; then
+    echo "Set TARGET_TENANT_ID (TESTCORP tenant uuid)." >&2
+    exit 1
+  fi
+
+  echo "=== Overview data for TARGET before backfill ==="
+  pg_psql -c "
+    SELECT
+      (SELECT COUNT(*) FROM scans WHERE tenant_id = '$target'::uuid AND state = 'completed') AS completed_scans,
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$target'::uuid) AS findings,
+      (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$target'::uuid) AS scan_summaries;
+  "
+
+  echo "=== Queueing overview reaggregation (scan_summaries, severity charts, etc.) ==="
+  "${COMPOSE[@]}" exec -T api uv run python manage.py shell -c "
+from tasks.tasks import reaggregate_all_finding_group_summaries_task
+result = reaggregate_all_finding_group_summaries_task.delay('$target')
+print('Queued task id:', result.id)
+"
+
+  echo ""
+  echo "Wait 1-3 minutes for worker to finish, then hard-refresh Cloud Security."
+  echo "Watch worker logs: docker compose -f docker-compose.yml -f docker-compose.vrika.yml logs -f worker"
 }
 
 migrate_postgres() {
@@ -214,8 +272,10 @@ SQL
   pg_psql -c "
     SELECT
       (SELECT COUNT(*) FROM scans WHERE tenant_id = '$target'::uuid) AS scans,
+      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$target'::uuid) AS findings,
       (SELECT COUNT(*) FROM providers WHERE tenant_id = '$target'::uuid) AS providers,
-      (SELECT COUNT(*) FROM attack_paths_scans WHERE tenant_id = '$target'::uuid) AS attack_paths_scans;
+      (SELECT COUNT(*) FROM attack_paths_scans WHERE tenant_id = '$target'::uuid) AS attack_paths_scans,
+      (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$target'::uuid) AS scan_summaries;
   "
 }
 
@@ -303,6 +363,10 @@ run_migrate() {
   fi
 
   echo ""
+  echo "=== Backfilling overview tables for dashboard ==="
+  TARGET_TENANT_ID="$target" run_backfill
+
+  echo ""
   echo "Done. Hard-refresh Cloud Security in Vrika (Cmd+Shift+R)."
   echo "If attack paths are still empty, re-run attack paths scan on each provider."
 }
@@ -314,8 +378,11 @@ case "$MODE" in
   migrate|move)
     run_migrate
     ;;
+  backfill|reaggregate)
+    run_backfill
+    ;;
   *)
-    echo "Usage: $0 {diag|migrate}" >&2
+    echo "Usage: $0 {diag|migrate|backfill}" >&2
     exit 1
     ;;
 esac
