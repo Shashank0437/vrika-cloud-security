@@ -72,7 +72,7 @@ import {
 } from "@/components/shared/query-code-editor";
 import { ResourceMetadataPanel } from "@/components/shared/resource-metadata-panel";
 import { withAppPath } from "@/lib/base-path";
-import { formatDuration } from "@/lib/date-utils";
+import { formatDuration, getFailingForLabel } from "@/lib/date-utils";
 import { shouldRefreshAfterTriageUpdate } from "@/lib/finding-triage";
 import { getRegionFlag } from "@/lib/region-flags";
 import { getVrikaAiLabel } from "@/lib/vrika-embed";
