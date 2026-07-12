@@ -1,11 +1,13 @@
-# Vrika POC overlay — Prowler on 127.0.0.1:8090, public via host nginx /prowler/
+# Vrika POC overlay — Prowler on host :8090 (all interfaces for Docker bridge access)
+# Public UI via host nginx https://…/prowler/
 services:
   nginx:
     image: nginx:alpine@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
     container_name: vrika-prowler-nginx
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8090:80"
+      # Bind all interfaces so vrika-server-api (Docker) can reach via host.docker.internal:8090
+      - "8090:80"
     volumes:
       - ./contrib/reverse-proxy/nginx.vrika.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
