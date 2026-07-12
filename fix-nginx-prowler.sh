@@ -43,6 +43,7 @@ if old_marker in content:
 patterns = [
     r"\n\s*location = /prowler \{[^}]*\}\n",
     r"\n\s*# VRIKA_PROWLER_443[^\n]*\n",
+    r"\n\s*location \^~ /prowler/api/v1/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/api/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/accounts/saml/ \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/ \{.*?\n    \}\n",
@@ -61,6 +62,10 @@ content = content[:idx] + snippet + content[idx:]
 Path(target).write_text(content)
 print(f"Cleaned and installed /prowler/ block in {target}")
 PY
+
+if [[ ! -e "$ENABLED" ]]; then
+  ln -sf "$TARGET" "$ENABLED"
+fi
 
 nginx -t && systemctl reload nginx
 echo "OK: https://192.168.9.188/prowler/"
