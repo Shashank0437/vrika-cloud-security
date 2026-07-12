@@ -30,6 +30,7 @@ import {
 import { GroupProps } from "@/types";
 
 import {
+  getVrikaAiLabel,
   isVrikaEmbedMode,
   VRIKA_EMBED_HIDDEN_MENU_LABELS,
 } from "./vrika-embed";
@@ -98,7 +99,7 @@ export const getMenuList = ({
             menus: [
               {
                 href: "/lighthouse",
-                label: "Lighthouse AI",
+                label: getVrikaAiLabel(),
                 icon: LighthouseIcon,
                 active: pathname === "/lighthouse",
               },

@@ -71,10 +71,11 @@ import {
   type QueryEditorLanguage,
 } from "@/components/shared/query-code-editor";
 import { ResourceMetadataPanel } from "@/components/shared/resource-metadata-panel";
-import { getFailingForLabel } from "@/lib/date-utils";
+import { withAppPath } from "@/lib/base-path";
 import { formatDuration } from "@/lib/date-utils";
 import { shouldRefreshAfterTriageUpdate } from "@/lib/finding-triage";
 import { getRegionFlag } from "@/lib/region-flags";
+import { getVrikaAiLabel } from "@/lib/vrika-embed";
 import { getRecommendationLinkLabel } from "@/lib/vulnerability-references";
 import type { ComplianceOverviewData } from "@/types/compliance";
 import type { FindingResourceRow } from "@/types/findings-table";
@@ -1376,14 +1377,16 @@ export function ResourceDetailDrawerContent({
       {/* Lighthouse AI button */}
       {!isNavigating && (
         <a
-          href={`/lighthouse?${new URLSearchParams({ prompt: `Analyze this security finding and provide remediation guidance:\n\n- **Finding**: ${checkMeta.checkTitle}\n- **Check ID**: ${checkMeta.checkId}\n- **Severity**: ${f?.severity ?? "unknown"}\n- **Status**: ${f?.status ?? "unknown"}${f?.statusExtended ? `\n- **Detail**: ${f.statusExtended}` : ""}${checkMeta.risk ? `\n- **Risk**: ${checkMeta.risk}` : ""}` }).toString()}`}
+          href={withAppPath(
+            `/lighthouse?${new URLSearchParams({ prompt: `Analyze this security finding and provide remediation guidance:\n\n- **Finding**: ${checkMeta.checkTitle}\n- **Check ID**: ${checkMeta.checkId}\n- **Severity**: ${f?.severity ?? "unknown"}\n- **Status**: ${f?.status ?? "unknown"}${f?.statusExtended ? `\n- **Detail**: ${f.statusExtended}` : ""}${checkMeta.risk ? `\n- **Risk**: ${checkMeta.risk}` : ""}` }).toString()}`,
+          )}
           className="flex items-center gap-1.5 rounded-lg px-4 py-3 text-sm font-bold text-slate-900 transition-opacity hover:opacity-90"
           style={{
             background: "var(--gradient-lighthouse)",
           }}
         >
           <CircleArrowRight className="size-5" />
-          Analyze This Finding With Lighthouse AI
+          Analyze This Finding With {getVrikaAiLabel()}
         </a>
       )}
     </div>

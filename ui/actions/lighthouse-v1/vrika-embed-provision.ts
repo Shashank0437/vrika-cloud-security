@@ -100,7 +100,9 @@ async function ensureProviderActive(
   providerType: LighthouseProvider,
   apiKey: string,
   baseUrl?: string,
+  options?: { validateAsync?: boolean },
 ): Promise<string> {
+  const validateAsync = options?.validateAsync !== false;
   const existing = await getLighthouseProviderByType(providerType);
   let providerId = existing.data?.id ? String(existing.data.id) : "";
 
@@ -130,6 +132,12 @@ async function ensureProviderActive(
         throw new Error("Lighthouse provider create returned no id");
       }
     }
+  }
+
+  // Embed: skip Celery connection/model tasks — they block SSR for ~80s and are
+  // fragile when the worker queue is busy. Provider defaults to is_active=true.
+  if (!validateAsync) {
+    return providerId;
   }
 
   const connection = await testProviderConnection(providerId);
@@ -175,7 +183,9 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
   }
 
   try {
-    await ensureProviderActive(provider, apiKey, baseUrl);
+    await ensureProviderActive(provider, apiKey, baseUrl, {
+      validateAsync: false,
+    });
 
     const tenantConfig = await getTenantConfig();
     const currentDefaults =

@@ -38,7 +38,8 @@ import {
 import { useToast } from "@/components/shadcn";
 import { CustomLink } from "@/components/shadcn/custom/custom-link";
 import { useMountEffect } from "@/hooks/use-mount-effect";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { withAppPath } from "@/lib/base-path";
+import { getVrikaAiLabel, isVrikaEmbedMode } from "@/lib/vrika-embed";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
 interface Model {
@@ -211,7 +212,7 @@ export const Chat = ({
     stop,
   } = useChat({
     transport: new DefaultChatTransport({
-      api: "/api/lighthouse/analyst",
+      api: withAppPath("/api/lighthouse/analyst"),
       credentials: "same-origin",
       body: () => ({
         model: selectedModelRef.current.modelId,
@@ -369,7 +370,7 @@ export const Chat = ({
               <CardDescription>
                 {embedMode
                   ? "Cloud Security AI is managed by your Vrika administrator."
-                  : "Please configure an LLM provider to use Lighthouse AI."}
+                  : `Please configure an LLM provider to use ${getVrikaAiLabel()}.`}
               </CardDescription>
             </CardHeader>
             {!embedMode && (

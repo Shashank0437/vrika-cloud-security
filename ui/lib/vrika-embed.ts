@@ -25,6 +25,11 @@ export function isVrikaEmbedBlockedRoute(pathname: string): boolean {
   );
 }
 
+/** AI assistant product name in page titles, nav, and CTAs. */
+export function getVrikaAiLabel(): string {
+  return isVrikaEmbedMode() ? "Vrika AI" : "Lighthouse AI";
+}
+
 /** Product name shown in page titles and empty states. */
 export function getEmbedAppName(): string {
   return isVrikaEmbedMode() ? "Cloud Security" : "Prowler";

@@ -19,7 +19,7 @@ import { Chat } from "@/components/lighthouse-v1";
 import { ContentLayout } from "@/components/shadcn/content-layout";
 import { LIGHTHOUSE_ROUTE } from "@/lib/lighthouse-routes";
 import { isCloud } from "@/lib/shared/env";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { getVrikaAiLabel, isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +78,7 @@ export default async function AIChatbot({
     const chatRouteKey = validSessionId ?? initialPrompt ?? "new";
 
     return (
-      <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+      <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
         <LighthouseV2NavigationModeSync />
         {/* [contain:layout] traps streamdown's fixed fullscreen overlay inside
             the chat area so it never covers the sidebar or navbar. */}
@@ -108,7 +108,7 @@ export default async function AIChatbot({
   if (!hasConfig) {
     if (embedMode) {
       return (
-        <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+        <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
           <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
             AI assistant is not available yet. Ask your Vrika administrator to
             configure{" "}
@@ -131,7 +131,7 @@ export default async function AIChatbot({
   if (providersConfig.errors || !providersConfig.providers) {
     if (embedMode) {
       return (
-        <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+        <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
           <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
             AI assistant configuration is incomplete. Contact your Vrika
             administrator.
@@ -143,7 +143,7 @@ export default async function AIChatbot({
   }
 
   return (
-    <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+    <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
       <div className="-mx-6 -my-4 h-[calc(100dvh-4.5rem)] sm:-mx-8">
         <Chat
           hasConfig={hasConfig}

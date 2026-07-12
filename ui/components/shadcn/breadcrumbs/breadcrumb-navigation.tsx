@@ -7,6 +7,7 @@ import { ReactNode } from "react";
 
 import { LighthouseIcon } from "@/components/icons/Icons";
 import { cn } from "@/lib/utils";
+import { getVrikaAiLabel } from "@/lib/vrika-embed";
 
 export interface CustomBreadcrumbItem {
   name: string;
@@ -82,7 +83,7 @@ export function BreadcrumbNavigation({
           .join(" ");
       }
       if (segment === "lighthouse") {
-        displayName = "Lighthouse AI";
+        displayName = getVrikaAiLabel();
       }
 
       const segmentIcon = !isLast ? pathIconMapping[currentPath] : undefined;
