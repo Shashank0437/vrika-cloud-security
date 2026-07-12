@@ -7,6 +7,7 @@ import {
 import { getTask } from "@/actions/task";
 import { auth } from "@/auth.config";
 import { useToast } from "@/components/shadcn";
+import { withAppPath } from "@/lib/base-path";
 import {
   COMPLIANCE_REPORT_DISPLAY_NAMES,
   type ComplianceReportType,
@@ -143,7 +144,9 @@ export const downloadScanZip = async (
   scanId: string,
   toast: ReturnType<typeof useToast>["toast"],
 ) => {
-  const reportUrl = `/api/scans/${encodeURIComponent(scanId)}/report`;
+  const reportUrl = withAppPath(
+    `/api/scans/${encodeURIComponent(scanId)}/report`,
+  );
 
   try {
     const preflightResponse = await fetch(`${reportUrl}?preflight=1`, {

@@ -71,6 +71,7 @@ location_patterns = [
     r"\n\s*# IMPORTANT: proxy /prowler[^\n]*\n",
     r"\n\s*# Django REST API only[^\n]*\n",
     r"\n\s*location \^~ /api/auth/ \{.*?\n    \}\n",
+    r"\n\s*location \^~ /api/scans/ \{.*?\n    \}\n",
     r"\n\s*location = /prowler \{.*?\n    \}\n",
     r"\n\s*location \^~ /prowler/api/auth/ \{.*?\n    \}\n",
     r"\n\s*location = /prowler/api/health \{.*?\n    \}\n",
