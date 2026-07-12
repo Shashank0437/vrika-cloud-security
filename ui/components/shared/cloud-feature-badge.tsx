@@ -1,7 +1,11 @@
 import type { CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import {
+  getCloudOnlyLabel,
+  isVrikaEmbedMode,
+  shouldShowCloudUpsellBadge,
+} from "@/lib/vrika-embed";
 
 interface MenuFeatureBadgeProps {
   label?: string;
@@ -59,17 +63,23 @@ export const MenuFeatureBadge = ({
 );
 
 export const CloudFeatureBadge = ({
-  label = "Available in Prowler Cloud",
+  label = getCloudOnlyLabel(),
   size,
   className,
-}: Omit<MenuFeatureBadgeProps, "variant">) => (
-  <MenuFeatureBadge
-    label={label}
-    variant="cloud"
-    size={size}
-    className={className}
-  />
-);
+}: Omit<MenuFeatureBadgeProps, "variant">) => {
+  if (!shouldShowCloudUpsellBadge()) {
+    return null;
+  }
+
+  return (
+    <MenuFeatureBadge
+      label={label}
+      variant="cloud"
+      size={size}
+      className={className}
+    />
+  );
+};
 
 interface CloudFeatureBadgeLinkProps
   extends Omit<MenuFeatureBadgeProps, "variant"> {
@@ -81,13 +91,19 @@ export const CloudFeatureBadgeLink = ({
   label,
   size,
   className,
-}: CloudFeatureBadgeLinkProps) => (
-  <a
-    href={href}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="shrink-0 whitespace-nowrap transition-opacity hover:opacity-90"
-  >
-    <CloudFeatureBadge label={label} size={size} className={className} />
-  </a>
-);
+}: CloudFeatureBadgeLinkProps) => {
+  if (!shouldShowCloudUpsellBadge()) {
+    return null;
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="shrink-0 whitespace-nowrap transition-opacity hover:opacity-90"
+    >
+      <CloudFeatureBadge label={label} size={size} className={className} />
+    </a>
+  );
+};

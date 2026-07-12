@@ -8,7 +8,7 @@ import type {
 } from "@/actions/overview/threat-score";
 import { RadialChart } from "@/components/graphs/radial-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { getThreatScoreLabel } from "@/lib/vrika-embed";
 
 // CSS variables are required here as they're passed to RadialChart component
 // which uses Recharts library that needs actual color values, not Tailwind classes
@@ -110,8 +110,7 @@ export function ThreatScore({
 
   // Extract top gaps from critical requirements
   const gaps = extractTopGaps(criticalRequirements, 2);
-  const embedMode = isVrikaEmbedMode();
-  const threatScoreLabel = embedMode ? "ThreatScore" : "Prowler ThreatScore";
+  const threatScoreLabel = getThreatScoreLabel();
 
   return (
     <Card

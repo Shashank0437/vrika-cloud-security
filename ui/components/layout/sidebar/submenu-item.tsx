@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/shadcn/tooltip";
 import { MenuFeatureBadge } from "@/components/shared/cloud-feature-badge";
+import { getCloudOnlyLabel } from "@/lib/vrika-embed";
 import { IconComponent } from "@/types";
 
 interface SubmenuItemProps {
@@ -63,7 +64,7 @@ export const SubmenuItem = ({
 
   if (disabled) {
     const tooltip = cloudOnly
-      ? "Available in Prowler Cloud"
+      ? getCloudOnlyLabel()
       : `${label} is unavailable.`;
 
     return (

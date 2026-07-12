@@ -14,6 +14,7 @@ import {
   type SidebarNavigationMode,
 } from "@/hooks/use-sidebar";
 import { cn } from "@/lib/utils";
+import { getCloudOnlyLabel } from "@/lib/vrika-embed";
 
 export function SidebarNavigationModeToggle({
   isOpen,
@@ -89,7 +90,7 @@ export function SidebarNavigationModeToggle({
           );
 
           const tooltipContent = disabled
-            ? "Available in Prowler Cloud"
+            ? getCloudOnlyLabel()
             : !isOpen
               ? mode.label
               : null;

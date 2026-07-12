@@ -36,6 +36,7 @@ import {
   scheduleFormSchema,
 } from "@/lib/schedules";
 import { isCloud } from "@/lib/shared/env";
+import { getEmbedAppName } from "@/lib/vrika-embed";
 import { useProviderWizardStore } from "@/store/provider-wizard/store";
 import { SCAN_JOBS_TAB } from "@/types";
 import {
@@ -301,7 +302,7 @@ export function LaunchStep({
       </div>
 
       <p className="text-text-neutral-secondary text-sm">
-        Your provider is connected to Prowler and ready to Scan!
+        Your provider is connected to {getEmbedAppName()} and ready to Scan!
       </p>
 
       {!providerId && (

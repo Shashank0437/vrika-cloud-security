@@ -3,17 +3,76 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+
+const VRIKA_PURPLE = "#684cb6";
+
 export const ThreatScoreLogo = () => {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const embedMode = isVrikaEmbedMode();
 
-  // Avoid hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
     return <div className="h-14" style={{ width: "280px", height: "56px" }} />;
+  }
+
+  if (embedMode) {
+    return (
+      <svg
+        viewBox="0 0 520 140"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-14 w-auto"
+        preserveAspectRatio="xMinYMid meet"
+        aria-label="ThreatScore"
+      >
+        <text
+          x="0"
+          y="98"
+          fontSize="72"
+          fontWeight="700"
+          fill={VRIKA_PURPLE}
+          fontFamily="inherit"
+        >
+          ThreatScore
+        </text>
+        <g transform="translate(380, 8) scale(1.6)">
+          <path
+            d="M 20 80 A 60 60 0 0 1 50 29.6"
+            stroke="#fb923c"
+            strokeWidth="16"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 50 29.6 A 60 60 0 0 1 110 29.6"
+            stroke="#ef4444"
+            strokeWidth="16"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 110 29.6 A 60 60 0 0 1 140 80"
+            stroke={VRIKA_PURPLE}
+            strokeWidth="16"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 60 80 L 72 92 L 104 60"
+            stroke={VRIKA_PURPLE}
+            strokeWidth="8"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </g>
+      </svg>
+    );
   }
 
   const prowlerColor = resolvedTheme === "dark" ? "#fff" : "#000";
@@ -25,8 +84,8 @@ export const ThreatScoreLogo = () => {
       xmlns="http://www.w3.org/2000/svg"
       className="h-14 w-auto"
       preserveAspectRatio="xMinYMid meet"
+      aria-label="Prowler ThreatScore"
     >
-      {/* Prowler logo from the new SVG - scaled and positioned to match THREATSCORE size */}
       <g transform="scale(0.50) translate(-60, 20)">
         <path
           fill={prowlerColor}
@@ -34,14 +93,11 @@ export const ThreatScoreLogo = () => {
         />
       </g>
 
-      {/* THREATSCORE text */}
       <text x="0" y="240" fontSize="80" fontWeight="700" fill="#22c55e">
         THREATSCORE
       </text>
 
-      {/* Gauge icon - semicircular meter - 1.5x larger */}
       <g transform="translate(680, 0) scale(2)">
-        {/* Gauge arcs - drawing from left to right (orange, red, green) */}
         <path
           d="M 20 80 A 60 60 0 0 1 50 29.6"
           stroke="#fb923c"
@@ -63,8 +119,6 @@ export const ThreatScoreLogo = () => {
           fill="none"
           strokeLinecap="round"
         />
-
-        {/* Checkmark */}
         <path
           d="M 60 80 L 72 92 L 104 60"
           stroke="#22c55e"

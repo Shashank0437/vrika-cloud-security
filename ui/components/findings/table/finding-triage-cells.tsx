@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/shadcn/tooltip";
 import { cn } from "@/lib/utils";
+import { getCloudOnlyLabel } from "@/lib/vrika-embed";
 import {
   FINDING_TRIAGE_DISABLED_REASON,
   FINDING_TRIAGE_NOTE_MAX_LENGTH,
@@ -34,8 +35,11 @@ import {
   TRIAGE_STATUS_TEXT_CLASS,
 } from "./finding-triage-status-control";
 
+/** @deprecated Use getCloudOnlyLabel() from @/lib/vrika-embed */
 export const CLOUD_ONLY_TOOLTIP_COPY = "Available in Prowler Cloud";
 export const EDITING_UNAVAILABLE_COPY = "Editing is currently unavailable.";
+
+const cloudOnlyTooltipCopy = () => getCloudOnlyLabel();
 
 const getDisabledCopy = ({
   triage,
@@ -47,7 +51,7 @@ const getDisabledCopy = ({
   lockResolved?: boolean;
 }): string | undefined => {
   if (triage.disabledReason === FINDING_TRIAGE_DISABLED_REASON.CLOUD_ONLY) {
-    return CLOUD_ONLY_TOOLTIP_COPY;
+    return cloudOnlyTooltipCopy();
   }
 
   // Status-picker only: notes stay available on resolved findings.

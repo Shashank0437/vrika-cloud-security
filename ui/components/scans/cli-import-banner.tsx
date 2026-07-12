@@ -8,6 +8,7 @@ import { Alert, AlertTitle } from "@/components/shadcn";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { DOCS_URLS } from "@/lib/external-urls";
 import { cn } from "@/lib/utils";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 const STORAGE_KEY = "prowler:cli-import-banner-dismissed";
 
@@ -24,7 +25,7 @@ export const CliImportBanner = ({ className }: { className?: string }) => {
     setIsVisible(false);
   };
 
-  if (isVisible === null || !isVisible) return null;
+  if (isVrikaEmbedMode() || isVisible === null || !isVisible) return null;
 
   return (
     <Alert

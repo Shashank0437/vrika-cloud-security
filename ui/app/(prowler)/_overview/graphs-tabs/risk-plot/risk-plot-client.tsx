@@ -9,6 +9,7 @@ import { ScatterPlot } from "@/components/graphs/scatter-plot";
 import { AlertPill } from "@/components/graphs/shared/alert-pill";
 import type { BarDataPoint } from "@/components/graphs/types";
 import { applyFailNonMutedFilters } from "@/lib";
+import { getThreatScoreLabel } from "@/lib/vrika-embed";
 import { SEVERITY_FILTER_MAP } from "@/types/severities";
 
 // Score color thresholds (0-100 scale, higher = better)
@@ -31,6 +32,7 @@ interface RiskPlotClientProps {
 export function RiskPlotClient({ data }: RiskPlotClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const threatScoreLabel = getThreatScoreLabel();
   const [selectedPoint, setSelectedPoint] = useState<RiskPlotPoint | null>(
     null,
   );
@@ -69,7 +71,7 @@ export function RiskPlotClient({ data }: RiskPlotClientProps) {
           <span style={{ color: scoreColor, fontWeight: "bold" }}>
             {point.x}%
           </span>{" "}
-          Prowler ThreatScore
+          {threatScoreLabel}
         </p>
         <div className="mt-2">
           <AlertPill value={point.y} />
@@ -89,7 +91,7 @@ export function RiskPlotClient({ data }: RiskPlotClientProps) {
                 Risk Plot
               </h3>
               <p className="text-text-neutral-tertiary mt-1 text-xs">
-                Prowler ThreatScore is severity-weighted, not quantity-based.
+                {threatScoreLabel} is severity-weighted, not quantity-based.
                 Higher severity findings have greater impact on the score.
               </p>
             </div>
@@ -98,7 +100,7 @@ export function RiskPlotClient({ data }: RiskPlotClientProps) {
               data={data}
               xAxis={{ label: "Fail Findings", dataKey: "y" }}
               yAxis={{
-                label: "Prowler ThreatScore",
+                label: threatScoreLabel,
                 dataKey: "x",
                 domain: [0, 100],
               }}
@@ -125,7 +127,7 @@ export function RiskPlotClient({ data }: RiskPlotClientProps) {
                   {selectedPoint.name}
                 </h4>
                 <p className="text-text-neutral-tertiary text-xs">
-                  Prowler ThreatScore: {selectedPoint.x}% | Fail Findings:{" "}
+                  {threatScoreLabel}: {selectedPoint.x}% | Fail Findings:{" "}
                   {selectedPoint.y}
                 </p>
               </div>
