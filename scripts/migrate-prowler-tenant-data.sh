@@ -23,6 +23,11 @@
 # Optional: skip Neo4j attack-path graph copy (postgres-only migration):
 #   SKIP_NEO4J=1 SOURCE_TENANT_ID=... TARGET_TENANT_ID=... bash scripts/...
 #
+# After postgres-only migration, copy attack paths graph separately:
+#   SOURCE_TENANT_ID=292fcdbc-9bc0-4c09-895d-46efe9341977 \
+#   TARGET_TENANT_ID=80281f43-521e-457e-ab59-3ca1df936a59 \
+#   bash scripts/migrate-prowler-tenant-data.sh neo4j
+#
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -118,10 +123,20 @@ run_diag() {
   "
 
   echo ""
-  echo "=== Neo4j tenant databases ==="
+  echo "=== Neo4j tenant databases (node counts) ==="
   "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "SHOW DATABASES YIELD name, currentStatus, default WHERE name STARTS WITH 'db-tenant-' RETURN name, currentStatus ORDER BY name;" \
+    "SHOW DATABASES YIELD name, currentStatus WHERE name STARTS WITH 'db-tenant-' RETURN name, currentStatus ORDER BY name;" \
     2>/dev/null || echo "(Could not list Neo4j databases — container may be down)"
+
+  while IFS= read -r db_name; do
+    [[ -z "$db_name" ]] && continue
+    count="$(neo4j_node_count "$db_name")"
+    echo "  $db_name: $count nodes"
+  done < <(
+    "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
+      "SHOW DATABASES YIELD name WHERE name STARTS WITH 'db-tenant-' RETURN name ORDER BY name;" \
+      2>/dev/null | tail -n +2 | tr -d ' "'
+  )
 
   cat <<'EOF'
 
@@ -134,6 +149,9 @@ Then run:
 
 If DB has scans/findings but UI still shows 0:
   TARGET_TENANT_ID=<target> bash scripts/migrate-prowler-tenant-data.sh backfill
+
+If attack paths show completed scans but queries return "No data found":
+  SOURCE_TENANT_ID=<source> TARGET_TENANT_ID=<target> bash scripts/migrate-prowler-tenant-data.sh neo4j
 EOF
 }
 
@@ -543,54 +561,230 @@ SQL
   "
 }
 
+neo4j_db_exists() {
+  local db="$1"
+  "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
+    "SHOW DATABASE \`$db\` YIELD name RETURN count(*) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0
+}
+
+neo4j_node_count() {
+  local db="$1"
+  if [[ "$(neo4j_db_exists "$db")" == "0" ]]; then
+    echo 0
+    return
+  fi
+  neo4j_cypher "$db" "MATCH (n) RETURN count(n) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0
+}
+
+tenant_label() {
+  printf '_Tenant_%s' "$(lowercase_uuid "$1" | tr -d '-')"
+}
+
+provider_label() {
+  printf '_Provider_%s' "$(lowercase_uuid "$1" | tr -d '-')"
+}
+
+neo4j_stop_database() {
+  local db="$1"
+  if [[ "$(neo4j_db_exists "$db")" != "0" ]]; then
+    neo4j_cypher system "STOP DATABASE \`$db\` WAIT;" 2>/dev/null || true
+  fi
+}
+
+neo4j_start_database() {
+  local db="$1"
+  if [[ "$(neo4j_db_exists "$db")" != "0" ]]; then
+    neo4j_cypher system "START DATABASE \`$db\` WAIT;" 2>/dev/null || true
+  fi
+}
+
+neo4j_drop_database() {
+  local db="$1"
+  neo4j_stop_database "$db"
+  neo4j_cypher system "DROP DATABASE \`$db\` IF EXISTS;" 2>/dev/null || true
+}
+
+neo4j_copy_database_admin() {
+  local src_db="$1"
+  local dst_db="$2"
+
+  echo "Stopping Neo4j databases for offline copy..."
+  neo4j_stop_database "$dst_db"
+  neo4j_stop_database "$src_db"
+
+  echo "Copying Neo4j store $src_db -> $dst_db via neo4j-admin ..."
+  if ! "${COMPOSE[@]}" exec -T neo4j neo4j-admin database copy \
+    --from-database="$src_db" \
+    --to-database="$dst_db" \
+    --overwrite-destination=true \
+    --verbose; then
+    neo4j_start_database "$src_db"
+    return 1
+  fi
+
+  neo4j_cypher system "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>/dev/null || true
+  neo4j_start_database "$src_db"
+  neo4j_start_database "$dst_db"
+}
+
+relabel_neo4j_graph() {
+  local source="$1"
+  local target="$2"
+  local dst_db="$3"
+  local old_tenant new_tenant
+
+  old_tenant="$(tenant_label "$source")"
+  new_tenant="$(tenant_label "$target")"
+
+  echo "=== Relabeling tenant graph labels in $dst_db ==="
+  echo "  $old_tenant -> $new_tenant"
+
+  if [[ "$old_tenant" != "$new_tenant" ]]; then
+    neo4j_cypher "$dst_db" "
+      MATCH (n:\`$old_tenant\`)
+      SET n:\`$new_tenant\`
+      REMOVE n:\`$old_tenant\`;
+    " 2>/dev/null || true
+  fi
+
+  echo "=== Relabeling provider graph labels (match by cloud account uid) ==="
+  while IFS=$'\t' read -r new_provider_id provider_type provider_uid; do
+    [[ -z "$new_provider_id" ]] && continue
+
+    root_label=""
+    case "$provider_type" in
+      aws) root_label="AWSAccount" ;;
+      gcp) root_label="GCPProject" ;;
+      azure) root_label="AzureSubscription" ;;
+      *)
+        echo "  Skipping unknown provider type: $provider_type"
+        continue
+        ;;
+    esac
+
+    old_provider_label="$(
+      neo4j_cypher "$dst_db" "
+        MATCH (acc:\`$root_label\` {id: '$provider_uid'})
+        RETURN [label IN labels(acc) WHERE label STARTS WITH '_Provider_'][0];
+      " 2>/dev/null | tail -1 | tr -d '[:space:]' || true
+    )"
+
+    new_provider_label="$(provider_label "$new_provider_id")"
+
+    if [[ -z "$old_provider_label" || "$old_provider_label" == "null" ]]; then
+      echo "  No graph root node for $provider_type uid=$provider_uid — skip provider relabel"
+      continue
+    fi
+
+    if [[ "$old_provider_label" == "$new_provider_label" ]]; then
+      echo "  $provider_uid already uses $new_provider_label"
+      continue
+    fi
+
+    echo "  $provider_uid: $old_provider_label -> $new_provider_label"
+    neo4j_cypher "$dst_db" "
+      MATCH (n:\`$old_provider_label\`)
+      SET n:\`$new_provider_label\`
+      REMOVE n:\`$old_provider_label\`;
+    " 2>/dev/null || true
+  done < <(
+    pg_psql -tA -F $'\t' -c "
+      SELECT id::text, provider, uid
+      FROM providers
+      WHERE tenant_id = '$target'::uuid
+      ORDER BY uid;
+    "
+  )
+}
+
 migrate_neo4j() {
   local source="$1"
   local target="$2"
-  local src_db dst_db
+  local src_db dst_db src_nodes dst_nodes
   src_db="db-tenant-$(lowercase_uuid "$source")"
   dst_db="db-tenant-$(lowercase_uuid "$target")"
 
   echo "=== Neo4j attack-path graphs: $src_db -> $dst_db ==="
 
-  local src_exists dst_exists
-  src_exists="$("${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "SHOW DATABASE \`$src_db\` YIELD name RETURN count(*) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0)"
-  dst_exists="$("${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "SHOW DATABASE \`$dst_db\` YIELD name RETURN count(*) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0)"
-
-  if [[ "$src_exists" == "0" ]]; then
-    echo "No source Neo4j database ($src_db). Attack paths may need a re-scan only."
+  if [[ "$(neo4j_db_exists "$src_db")" == "0" ]]; then
+    echo "No source Neo4j database ($src_db)."
+    if [[ "$(neo4j_db_exists "$dst_db")" != "0" ]]; then
+      echo "Target database exists — relabeling provider/tenant labels only."
+      relabel_neo4j_graph "$source" "$target" "$dst_db"
+    else
+      echo "Re-run attack paths scan on each provider in the UI to populate graph data."
+    fi
     return 0
   fi
 
-  if [[ "$dst_exists" != "0" ]]; then
-    echo "Target Neo4j database already exists ($dst_db). Keeping both; source graph copied if supported."
+  src_nodes="$(neo4j_node_count "$src_db")"
+  dst_nodes="$(neo4j_node_count "$dst_db")"
+  echo "Source nodes: $src_nodes | Target nodes: $dst_nodes"
+
+  if [[ "$src_nodes" == "0" ]]; then
+    echo "Source Neo4j database is empty. Re-run attack paths scan on each provider."
+    return 0
   fi
 
-  echo "Creating $dst_db as copy of $src_db ..."
-  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>/dev/null; then
-    :
+  if [[ "$dst_nodes" != "0" && "${FORCE_NEO4J_COPY:-}" != "1" ]]; then
+    echo "Target Neo4j database already has $dst_nodes nodes."
+    echo "Relabeling tenant/provider labels (set FORCE_NEO4J_COPY=1 to replace target graph)."
+    relabel_neo4j_graph "$source" "$target" "$dst_db"
+    return 0
   fi
 
-  # Neo4j Community/DozerDB: clone via APOC export/import between databases on same instance.
-  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d "$src_db" \
-    "CALL apoc.export.cypher.all(null, {format:'cypher-shell', useOptimizations:{type:'UNWIND_BATCH', unwindBatchSize:200}}) YIELD file, nodes, relationships RETURN nodes, relationships;" \
-    2>/dev/null; then
-    echo "APOC export from source completed. Importing into target..."
-    # Fallback: if AS COPY OF works (some Neo4j builds), prefer that.
+  if [[ "$(neo4j_db_exists "$dst_db")" != "0" ]]; then
+    echo "Dropping existing target Neo4j database ($dst_db) before copy..."
+    neo4j_drop_database "$dst_db"
   fi
 
-  if "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-    "CREATE DATABASE \`$dst_db\` AS COPY OF \`$src_db\`;" 2>/dev/null; then
+  if neo4j_copy_database_admin "$src_db" "$dst_db"; then
     echo "Neo4j database copied successfully."
-    return 0
+  elif "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
+    "CREATE DATABASE \`$dst_db\` AS COPY OF \`$src_db\`;" 2>/dev/null; then
+    echo "Neo4j database copied via CREATE DATABASE AS COPY OF."
+  else
+    echo "WARNING: Could not auto-copy Neo4j graph." >&2
+    echo "  Run manually on the server:" >&2
+    echo "    SOURCE_TENANT_ID=$source TARGET_TENANT_ID=$target FORCE_NEO4J_COPY=1 \\" >&2
+    echo "      bash scripts/migrate-prowler-tenant-data.sh neo4j" >&2
+    echo "  Or re-run attack paths scan on each provider in the UI." >&2
+    return 1
   fi
 
-  echo "WARNING: Could not auto-copy Neo4j graph."
-  echo "  Scans/findings will show after postgres migration."
-  echo "  For attack paths, re-run an attack paths scan on each provider in the UI,"
-  echo "  or ask ops to clone Neo4j database $src_db to $dst_db manually."
+  dst_nodes="$(neo4j_node_count "$dst_db")"
+  echo "Target nodes after copy: $dst_nodes"
+  relabel_neo4j_graph "$source" "$target" "$dst_db"
+}
+
+run_neo4j_only() {
+  local source="${SOURCE_TENANT_ID:-}"
+  local target="${TARGET_TENANT_ID:-}"
+
+  if [[ -z "$source" || -z "$target" ]]; then
+    echo "Set SOURCE_TENANT_ID and TARGET_TENANT_ID environment variables." >&2
+    exit 1
+  fi
+
+  migrate_neo4j "$source" "$target"
+
+  echo ""
+  echo "=== Attack paths scan rows on TARGET ==="
+  pg_psql -c "
+    SELECT a.id, a.state, a.graph_data_ready, p.uid AS provider_uid, a.completed_at
+    FROM attack_paths_scans a
+    JOIN providers p ON p.id = a.provider_id
+    WHERE a.tenant_id = '$target'::uuid
+    ORDER BY a.completed_at DESC NULLS LAST
+    LIMIT 10;
+  "
+
+  local dst_db dst_nodes
+  dst_db="db-tenant-$(lowercase_uuid "$target")"
+  dst_nodes="$(neo4j_node_count "$dst_db")"
+  echo "Target Neo4j nodes ($dst_db): $dst_nodes"
+  echo ""
+  echo "Done. Hard-refresh Attack Paths in Vrika and re-run a query."
 }
 
 run_migrate() {
@@ -651,8 +845,11 @@ case "$MODE" in
   backfill|reaggregate)
     run_backfill
     ;;
+  neo4j|attack-paths|attack_paths)
+    run_neo4j_only
+    ;;
   *)
-    echo "Usage: $0 {diag|migrate|backfill}" >&2
+    echo "Usage: $0 {diag|migrate|backfill|neo4j}" >&2
     exit 1
     ;;
 esac

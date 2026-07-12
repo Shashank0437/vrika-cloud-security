@@ -53,8 +53,18 @@ echo "=== final counts ==="
 SELECT
   (SELECT COUNT(*) FROM scans WHERE tenant_id = '$TARGET_TENANT_ID'::uuid) AS scans,
   (SELECT COUNT(*) FROM findings WHERE tenant_id = '$TARGET_TENANT_ID'::uuid) AS findings,
-  (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$TARGET_TENANT_ID'::uuid) AS summaries;
+  (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$TARGET_TENANT_ID'::uuid) AS summaries,
+  (SELECT COUNT(*) FROM attack_paths_scans WHERE tenant_id = '$TARGET_TENANT_ID'::uuid) AS attack_paths_scans;
 "
+
+attack_paths_scans="$("${COMPOSE[@]}" exec -T postgres psql -U "$PG_USER" -d "$PG_DB" -tAc \
+  "SELECT COUNT(*) FROM attack_paths_scans WHERE tenant_id = '$TARGET_TENANT_ID'::uuid;" | tr -d '[:space:]')"
+
+if [[ "$attack_paths_scans" != "0" ]]; then
+  echo "=== migrate attack paths Neo4j graph ==="
+  SOURCE_TENANT_ID="$SOURCE_TENANT_ID" TARGET_TENANT_ID="$TARGET_TENANT_ID" \
+    bash scripts/migrate-prowler-tenant-data.sh neo4j
+fi
 
 echo "=== RLS check via Django ==="
 "${COMPOSE[@]}" exec -T api uv run python manage.py shell -c "
