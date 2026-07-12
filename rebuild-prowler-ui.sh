@@ -10,12 +10,14 @@ if grep -rq 'from "../providers"' ui/app/ 2>/dev/null; then
   exit 1
 fi
 
-# Stray ui/layout.tsx (outside app/) breaks `pnpm run build` typecheck — not a valid App Router layout.
-if [[ -f ui/layout.tsx ]]; then
-  echo "ERROR: remove stale ui/layout.tsx (use ui/app/(prowler)/layout.tsx only):" >&2
-  echo "  rm -f ui/layout.tsx" >&2
-  exit 1
-fi
+# Stray copies under ui/ (outside app/, lib/, components/) break `pnpm run build` typecheck.
+while IFS= read -r -d '' f; do
+  if ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+    echo "ERROR: remove untracked stray file (breaks Docker typecheck): $f" >&2
+    echo "  rm -f \"$f\"" >&2
+    exit 1
+  fi
+done < <(find ui -maxdepth 1 \( -name '*.ts' -o -name '*.tsx' \) -print0 2>/dev/null)
 
 # --no-cache: avoid stale COPY layers serving old layout.tsx after git pull.
 $COMPOSE build --no-cache ui
