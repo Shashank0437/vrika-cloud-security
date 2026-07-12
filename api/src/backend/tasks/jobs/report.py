@@ -1393,16 +1393,23 @@ def generate_compliance_reports_job(
     )
 
 
-def generate_vrika_full_pdf_job(
+def generate_vrika_scan_pdf_job(
     tenant_id: str,
     scan_id: str,
     provider_id: str,
+    variant: str,
 ) -> dict[str, bool | str]:
-    """Generate and upload the on-demand Vrika full scan PDF."""
+    """Generate and upload an on-demand Vrika scan PDF (executive or full)."""
     from django.core.cache import cache
-    from tasks.jobs.reports.vrika_scan import generate_vrika_full_report
+    from tasks.jobs.reports.vrika_scan import (
+        generate_vrika_executive_report,
+        generate_vrika_full_report,
+    )
 
-    lock_key = f"vrika-full-pdf:{scan_id}"
+    if variant not in {"executive", "full"}:
+        raise ValueError(f"Unsupported Vrika scan PDF variant: {variant}")
+
+    lock_key = f"vrika-{variant}-pdf:{scan_id}"
     try:
         with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
             provider_obj = Provider.objects.get(id=provider_id)
@@ -1415,22 +1422,42 @@ def generate_vrika_full_pdf_job(
             scan_id,
             compliance_framework="vrika",
         )
-        full_pdf = f"{vrika_dir}_full_report.pdf"
-        generate_vrika_full_report(
+        suffix = "executive" if variant == "executive" else "full"
+        pdf_path = f"{vrika_dir}_{suffix}_report.pdf"
+        generator = (
+            generate_vrika_executive_report
+            if variant == "executive"
+            else generate_vrika_full_report
+        )
+        generator(
             tenant_id=tenant_id,
             scan_id=scan_id,
             provider_id=provider_id,
-            output_path=full_pdf,
+            output_path=pdf_path,
         )
         upload_uri = _upload_to_s3(
             tenant_id,
             scan_id,
-            full_pdf,
-            f"vrika/{Path(full_pdf).name}",
+            pdf_path,
+            f"vrika/{Path(pdf_path).name}",
         )
         return {
             "upload": bool(upload_uri),
-            "path": upload_uri or full_pdf,
+            "path": upload_uri or pdf_path,
         }
     finally:
         cache.delete(lock_key)
+
+
+def generate_vrika_full_pdf_job(
+    tenant_id: str,
+    scan_id: str,
+    provider_id: str,
+) -> dict[str, bool | str]:
+    """Backwards-compatible wrapper for the full scan PDF job."""
+    return generate_vrika_scan_pdf_job(
+        tenant_id=tenant_id,
+        scan_id=scan_id,
+        provider_id=provider_id,
+        variant="full",
+    )

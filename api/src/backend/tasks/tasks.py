@@ -1442,18 +1442,39 @@ def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: 
 
 @shared_task(
     base=RLSTask,
+    name="scan-vrika-scan-report",
+    queue="scan-reports",
+)
+@handle_provider_deletion
+def generate_vrika_scan_pdf_task(
+    tenant_id: str, scan_id: str, provider_id: str, variant: str
+):
+    """On-demand Celery task for Vrika executive or full scan PDFs."""
+    from tasks.jobs.report import generate_vrika_scan_pdf_job
+
+    return generate_vrika_scan_pdf_job(
+        tenant_id=tenant_id,
+        scan_id=scan_id,
+        provider_id=provider_id,
+        variant=variant,
+    )
+
+
+@shared_task(
+    base=RLSTask,
     name="scan-vrika-full-report",
     queue="scan-reports",
 )
 @handle_provider_deletion
 def generate_vrika_full_pdf_task(tenant_id: str, scan_id: str, provider_id: str):
     """On-demand Celery task for the Vrika full scan PDF."""
-    from tasks.jobs.report import generate_vrika_full_pdf_job
+    from tasks.jobs.report import generate_vrika_scan_pdf_job
 
-    return generate_vrika_full_pdf_job(
+    return generate_vrika_scan_pdf_job(
         tenant_id=tenant_id,
         scan_id=scan_id,
         provider_id=provider_id,
+        variant="full",
     )
 
 

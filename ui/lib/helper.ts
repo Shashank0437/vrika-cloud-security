@@ -200,13 +200,42 @@ export const downloadScanExecutivePdf = async (
     title: "Download Started",
     description: "Preparing the Vrika executive PDF report.",
   });
-  const result = await getVrikaScanPdfReport(scanId, "executive");
-  await downloadFile(
-    result,
-    "application/pdf",
-    "The Vrika executive PDF report has been downloaded successfully.",
-    toast,
-  );
+
+  const maxAttempts = 40;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await getVrikaScanPdfReport(scanId, "executive");
+
+    if ("success" in result && result.success) {
+      await downloadFile(
+        result,
+        "application/pdf",
+        "The Vrika executive PDF report has been downloaded successfully.",
+        toast,
+      );
+      return;
+    }
+
+    if ("pending" in result && result.pending) {
+      await wait(3000);
+      continue;
+    }
+
+    if ("error" in result) {
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: result.error,
+      });
+      return;
+    }
+  }
+
+  toast({
+    variant: "destructive",
+    title: "Download Timed Out",
+    description:
+      "The executive report is still being generated. Please try again in a few minutes.",
+  });
 };
 
 export const downloadScanFullPdf = async (

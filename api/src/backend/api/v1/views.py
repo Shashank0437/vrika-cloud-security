@@ -2749,23 +2749,25 @@ class ScanViewSet(BaseRLSViewSet):
             loader = self._load_file(pattern, s3=False)
 
         if isinstance(loader, Response):
-            if variant == "full" and loader.status_code == status.HTTP_404_NOT_FOUND:
+            if loader.status_code == status.HTTP_404_NOT_FOUND:
                 from django.core.cache import cache
-                from tasks.tasks import generate_vrika_full_pdf_task
+                from tasks.tasks import generate_vrika_scan_pdf_task
 
-                lock_key = f"vrika-full-pdf:{scan.id}"
+                lock_key = f"vrika-{variant}-pdf:{scan.id}"
                 if not cache.get(lock_key):
                     cache.set(lock_key, True, timeout=3600)
-                    generate_vrika_full_pdf_task.apply_async(
+                    generate_vrika_scan_pdf_task.apply_async(
                         kwargs={
                             "tenant_id": str(scan.tenant_id),
                             "scan_id": str(scan.id),
                             "provider_id": str(scan.provider_id),
+                            "variant": variant,
                         }
                     )
+                label = "executive" if variant == "executive" else "full"
                 return Response(
                     {
-                        "detail": "The full scan report is being generated. Please retry shortly."
+                        "detail": f"The {label} scan report is being generated. Please retry shortly."
                     },
                     status=status.HTTP_202_ACCEPTED,
                 )
