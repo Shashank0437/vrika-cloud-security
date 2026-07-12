@@ -36,6 +36,12 @@ services:
 
   api:
     ports: !reset []
+    # Z800 cold start: migrations + Gunicorn + compliance cache warm-up can exceed 3 min.
+    healthcheck:
+      start_period: 180s
+      interval: 15s
+      timeout: 10s
+      retries: 16
 
   mcp-server:
     ports: !reset []
