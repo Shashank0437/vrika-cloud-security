@@ -354,6 +354,81 @@ COMMIT;
 SQL
 }
 
+merge_duplicate_roles() {
+  local source="$1"
+  local target="$2"
+
+  echo "=== Merging duplicate roles (same name) ==="
+  pg_psql <<SQL
+BEGIN;
+
+DO \$\$
+DECLARE
+  pair RECORD;
+  r RECORD;
+  updated BIGINT;
+BEGIN
+  FOR pair IN
+    SELECT sr.id AS source_role_id, tr.id AS target_role_id, sr.name AS role_name
+    FROM roles sr
+    JOIN roles tr
+      ON tr.name = sr.name
+    WHERE sr.tenant_id = '$source'::uuid
+      AND tr.tenant_id = '$target'::uuid
+  LOOP
+    RAISE NOTICE 'Re-pointing data from source role % (%) to target role %',
+      pair.role_name, pair.source_role_id, pair.target_role_id;
+
+    FOR r IN
+      SELECT DISTINCT c.table_name, c.column_name
+      FROM information_schema.columns c
+      JOIN information_schema.tables t
+        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+      WHERE c.table_schema = 'public'
+        AND c.column_name = 'role_id'
+        AND c.data_type = 'uuid'
+        AND t.table_type = 'BASE TABLE'
+        AND c.table_name <> 'roles'
+      ORDER BY c.table_name
+    LOOP
+      EXECUTE format(
+        'UPDATE %I SET %I = %L::uuid WHERE %I = %L::uuid',
+        r.table_name, r.column_name,
+        pair.target_role_id, r.column_name, pair.source_role_id
+      );
+      GET DIAGNOSTICS updated = ROW_COUNT;
+      IF updated > 0 THEN
+        RAISE NOTICE '  Updated % rows in %.%', updated, r.table_name, r.column_name;
+      END IF;
+    END LOOP;
+
+    DELETE FROM role_provider_group_relationship a
+    USING role_provider_group_relationship b
+    WHERE a.id > b.id
+      AND a.role_id = b.role_id
+      AND a.provider_group_id = b.provider_group_id;
+
+    DELETE FROM role_user_relationship a
+    USING role_user_relationship b
+    WHERE a.id > b.id
+      AND a.role_id = b.role_id
+      AND a.user_id = b.user_id;
+
+    DELETE FROM role_invitation_relationship a
+    USING role_invitation_relationship b
+    WHERE a.id > b.id
+      AND a.role_id = b.role_id
+      AND a.invitation_id = b.invitation_id;
+
+    DELETE FROM roles WHERE id = pair.source_role_id;
+    RAISE NOTICE 'Removed duplicate source role %', pair.role_name;
+  END LOOP;
+END \$\$;
+
+COMMIT;
+SQL
+}
+
 dedupe_tenant_join_rows() {
   local source="$1"
   local target="$2"
@@ -417,6 +492,7 @@ migrate_postgres() {
   merge_duplicate_providers "$source" "$target"
   merge_duplicate_resources "$source" "$target"
   merge_duplicate_resource_tags "$source" "$target"
+  merge_duplicate_roles "$source" "$target"
   dedupe_tenant_join_rows "$source" "$target"
 
   pg_psql <<SQL
