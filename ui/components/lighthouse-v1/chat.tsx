@@ -39,6 +39,7 @@ import { useToast } from "@/components/shadcn";
 import { CustomLink } from "@/components/shadcn/custom/custom-link";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { withAppPath } from "@/lib/base-path";
+import { cn } from "@/lib/utils";
 import { getVrikaAiLabel, isVrikaEmbedMode } from "@/lib/vrika-embed";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
@@ -443,7 +444,14 @@ export const Chat = ({
       )}
 
       {messages.length === 0 && !errorMessage && !error ? (
-        <div className="flex flex-1 items-center justify-center px-2 py-4 sm:p-4">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 px-2 sm:px-4",
+            embedMode
+              ? "flex-col justify-end gap-4 pt-4 pb-2"
+              : "items-center justify-center py-4",
+          )}
+        >
           <div className="w-full max-w-2xl">
             <h2 className="mb-4 text-center font-sans text-xl">Suggestions</h2>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -502,8 +510,19 @@ export const Chat = ({
         </Conversation>
       )}
 
-      <div className="mx-auto w-full px-4 pb-16 md:max-w-3xl md:pb-16">
+      <div
+        className={cn(
+          "mx-auto min-w-0 shrink-0",
+          embedMode
+            ? "w-[min(100%,60%)] px-1 pt-3 pb-5"
+            : "w-full px-4 pb-16 md:max-w-3xl md:pb-16",
+        )}
+      >
         <PromptInput
+          className={cn(
+            embedMode &&
+              "[&_[data-slot=input-group]]:border-border-neutral-secondary [&_[data-slot=input-group]]:bg-bg-neutral-primary [&_[data-slot=input-group]]:rounded-[1.25rem] [&_[data-slot=input-group]]:shadow-[0_14px_40px_-24px_rgba(49,39,89,0.38)] [&_[data-slot=input-group]]:ring-1 [&_[data-slot=input-group]]:ring-black/[0.04]",
+          )}
           onSubmit={(message) => {
             if (
               status === MESSAGE_STATUS.STREAMING ||
@@ -531,6 +550,9 @@ export const Chat = ({
               onChange={(e) =>
                 setUiState((prev) => ({ ...prev, inputValue: e.target.value }))
               }
+              className={cn(
+                embedMode && "min-h-[4.5rem] pt-3.5 text-[14px] leading-snug",
+              )}
             />
           </PromptInputBody>
 
