@@ -52,13 +52,17 @@ export const GRAPH_NODE_BORDER_COLORS = {
 } as const;
 
 // Edge colors per theme
-export const GRAPH_EDGE_COLOR_DARK = "#ffffff"; // White for dark theme
-export const GRAPH_EDGE_COLOR_LIGHT = "#1e293b"; // Slate 800 for light theme
-export const GRAPH_EDGE_HIGHLIGHT_COLOR = "#34d399"; // Prowler green (hover/selection)
-export const GRAPH_EDGE_GLOW_COLOR = "#6ee7b7";
+export const GRAPH_EDGE_COLOR_DARK = "#c084fc"; // Purple 400 for dark theme
+export const GRAPH_EDGE_COLOR_LIGHT = "#9333ea"; // Purple 600 for light theme
+export const GRAPH_EDGE_HIGHLIGHT_COLOR = "#9333ea"; // Purple (hover/selection/highlighted path)
+export const GRAPH_EDGE_GLOW_COLOR = "#c084fc";
 export const GRAPH_SELECTION_COLOR = "#ffffff";
 export const GRAPH_BORDER_COLOR = "#374151";
 export const GRAPH_ALERT_BORDER_COLOR = "#ef4444"; // Red 500 - for resources with findings
+
+/** Node text below badges — readable on light embed backgrounds */
+export const GRAPH_NODE_LABEL_COLOR = "#3f3f46"; // Zinc 700
+export const GRAPH_NODE_LABEL_MUTED_COLOR = "#52525b"; // Zinc 600
 
 /**
  * Get node fill color based on labels and properties

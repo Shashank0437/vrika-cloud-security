@@ -9,7 +9,12 @@ import {
 } from "@/components/shadcn/tooltip";
 import type { GraphNode } from "@/types/attack-paths";
 
-import { resolveNodeColors, resolveNodeVisual } from "../../../_lib";
+import {
+  GRAPH_NODE_LABEL_COLOR,
+  GRAPH_NODE_LABEL_MUTED_COLOR,
+  resolveNodeColors,
+  resolveNodeVisual,
+} from "../../../_lib";
 import { FINDING_NODE_DIMENSIONS } from "../../../_lib/node-dimensions";
 import { getNodeLabelDisplay } from "../../../_lib/node-label-lines";
 import { HiddenHandles } from "./hidden-handles";
@@ -129,8 +134,7 @@ export const FindingNode = ({ data, selected }: NodeProps) => {
         y={TITLE_Y}
         textAnchor="middle"
         dominantBaseline="middle"
-        fill="#ffffff"
-        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+        fill={GRAPH_NODE_LABEL_COLOR}
         pointerEvents="none"
       >
         {displayTitle.lines.map((line, index) => (
@@ -149,7 +153,7 @@ export const FindingNode = ({ data, selected }: NodeProps) => {
             x={TEXT_X}
             y={SEVERITY_Y}
             fontSize="9px"
-            fill="rgba(255,255,255,0.82)"
+            fill={GRAPH_NODE_LABEL_MUTED_COLOR}
           >
             {severity}
           </tspan>

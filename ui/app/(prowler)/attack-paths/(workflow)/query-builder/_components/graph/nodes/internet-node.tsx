@@ -4,7 +4,7 @@ import { type NodeProps } from "@xyflow/react";
 
 import type { GraphNode } from "@/types/attack-paths";
 
-import { resolveNodeColors } from "../../../_lib";
+import { GRAPH_NODE_LABEL_COLOR, resolveNodeColors } from "../../../_lib";
 import { HiddenHandles } from "./hidden-handles";
 
 interface InternetNodeData {
@@ -67,10 +67,9 @@ export const InternetNode = ({ data, selected }: NodeProps) => {
           y={RADIUS}
           textAnchor="middle"
           dominantBaseline="middle"
-          fill="#ffffff"
+          fill={GRAPH_NODE_LABEL_COLOR}
           fontSize="11px"
           fontWeight="600"
-          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
           pointerEvents="none"
         >
           Internet

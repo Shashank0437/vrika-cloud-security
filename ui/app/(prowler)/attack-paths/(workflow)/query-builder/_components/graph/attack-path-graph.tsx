@@ -30,6 +30,8 @@ import {
   getNodeBorderColor,
   getNodeColor,
   getPathEdges,
+  GRAPH_EDGE_COLOR_LIGHT,
+  GRAPH_EDGE_GLOW_COLOR,
   GRAPH_EDGE_HIGHLIGHT_COLOR,
   resolveHiddenFindingIds,
 } from "../../_lib";
@@ -77,6 +79,11 @@ const GRAPH_STYLES = `
   @keyframes dash {
     to { stroke-dashoffset: -20; }
   }
+  .react-flow .resource-edge .react-flow__edge-path,
+  .react-flow .finding-edge .react-flow__edge-path {
+    stroke: ${GRAPH_EDGE_COLOR_LIGHT};
+    stroke-width: 2.5;
+  }
   .react-flow .finding-edge .react-flow__edge-path {
     stroke-dasharray: 8 6;
     animation: dash 1s linear infinite;
@@ -91,7 +98,7 @@ const GRAPH_STYLES = `
   .react-flow .highlighted .react-flow__edge-path {
     stroke: ${GRAPH_EDGE_HIGHLIGHT_COLOR};
     stroke-width: 3;
-    filter: drop-shadow(0 0 4px ${GRAPH_EDGE_HIGHLIGHT_COLOR});
+    filter: drop-shadow(0 0 4px ${GRAPH_EDGE_GLOW_COLOR});
   }
 `;
 
