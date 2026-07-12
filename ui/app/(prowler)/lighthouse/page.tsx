@@ -112,11 +112,10 @@ export default async function AIChatbot({
           <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
             AI assistant is not available yet. Ask your Vrika administrator to
             configure{" "}
-            <code className="text-text-neutral-primary">VRIKA_LLM_API_KEY</code>{" "}
-            (OpenRouter) and{" "}
-            <code className="text-text-neutral-primary">
-              VRIKA_LIGHTHOUSE_MODEL
-            </code>{" "}
+            <code className="text-text-neutral-primary">VRIKA_LLM_API_KEY</code>
+            , <code className="text-text-neutral-primary">VRIKA_LLM_URL</code>,
+            and{" "}
+            <code className="text-text-neutral-primary">VRIKA_LLM_MODEL</code>{" "}
             on the Cloud Security server.
           </div>
         </ContentLayout>

@@ -142,7 +142,7 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
   const { apiKey, model, provider, baseUrl } = readEmbedLighthouseEnv();
   if (!apiKey) {
     console.error(
-      "[Vrika embed] Lighthouse not configured: set VRIKA_LLM_API_KEY (or VRIKA_LIGHTHOUSE_OPENAI_API_KEY)",
+      "[Vrika embed] Lighthouse not configured: set VRIKA_LLM_API_KEY, VRIKA_LLM_URL, and VRIKA_LLM_MODEL",
     );
     return false;
   }
