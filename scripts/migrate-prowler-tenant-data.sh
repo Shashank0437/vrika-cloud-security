@@ -354,6 +354,39 @@ COMMIT;
 SQL
 }
 
+dedupe_tenant_join_rows() {
+  local source="$1"
+  local target="$2"
+
+  echo "=== Deduplicating join rows already present on TARGET ==="
+  pg_psql <<SQL
+BEGIN;
+
+DELETE FROM resource_tag_mappings src
+USING resource_tag_mappings tgt
+WHERE src.tenant_id = '$source'::uuid
+  AND tgt.tenant_id = '$target'::uuid
+  AND src.resource_id = tgt.resource_id
+  AND src.tag_id = tgt.tag_id;
+
+DELETE FROM resource_finding_mappings src
+USING resource_finding_mappings tgt
+WHERE src.tenant_id = '$source'::uuid
+  AND tgt.tenant_id = '$target'::uuid
+  AND src.resource_id = tgt.resource_id
+  AND src.finding_id = tgt.finding_id;
+
+DELETE FROM resource_scan_summaries src
+USING resource_scan_summaries tgt
+WHERE src.tenant_id = '$source'::uuid
+  AND tgt.tenant_id = '$target'::uuid
+  AND src.scan_id = tgt.scan_id
+  AND src.resource_id = tgt.resource_id;
+
+COMMIT;
+SQL
+}
+
 migrate_postgres() {
   local source="$1"
   local target="$2"
@@ -384,6 +417,7 @@ migrate_postgres() {
   merge_duplicate_providers "$source" "$target"
   merge_duplicate_resources "$source" "$target"
   merge_duplicate_resource_tags "$source" "$target"
+  dedupe_tenant_join_rows "$source" "$target"
 
   pg_psql <<SQL
 BEGIN;
