@@ -190,14 +190,14 @@ describe("getMenuList", () => {
       process.env.NEXT_PUBLIC_VRIKA_EMBED_MODE = "true";
     });
 
-    it("should hide org, support, hub, and lighthouse nav items", () => {
+    it("should hide org, support, hub, and lighthouse settings but keep AI chat nav", () => {
       const labels = getTopLevelLabels();
       const configLabels = getConfigurationLabels();
 
       expect(labels).not.toContain("Organization");
       expect(labels).not.toContain("Support & Help");
       expect(labels).not.toContain("Prowler Hub");
-      expect(labels).not.toContain("Lighthouse AI");
+      expect(labels).toContain("Lighthouse AI");
       expect(configLabels).not.toContain("Lighthouse AI");
       expect(labels).toContain("Overview");
       expect(labels).toContain("Compliance");

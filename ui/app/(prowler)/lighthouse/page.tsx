@@ -4,6 +4,7 @@ import {
   getLighthouseProvidersConfig,
   isLighthouseConfigured,
 } from "@/actions/lighthouse-v1/lighthouse";
+import { ensureVrikaEmbedLighthouseConfig } from "@/actions/lighthouse-v1/vrika-embed-provision";
 import {
   getLighthouseV2Configurations,
   getLighthouseV2Messages,
@@ -18,6 +19,7 @@ import { Chat } from "@/components/lighthouse-v1";
 import { ContentLayout } from "@/components/shadcn/content-layout";
 import { LIGHTHOUSE_ROUTE } from "@/lib/lighthouse-routes";
 import { isCloud } from "@/lib/shared/env";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 export const dynamic = "force-dynamic";
 
@@ -96,9 +98,32 @@ export default async function AIChatbot({
     );
   }
 
-  const hasConfig = await isLighthouseConfigured();
+  const embedMode = isVrikaEmbedMode();
+  let hasConfig = await isLighthouseConfigured();
+
+  if (embedMode && !hasConfig) {
+    hasConfig = await ensureVrikaEmbedLighthouseConfig();
+  }
 
   if (!hasConfig) {
+    if (embedMode) {
+      return (
+        <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+          <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
+            AI assistant is not available yet. Ask your Vrika administrator to
+            configure{" "}
+            <code className="text-text-neutral-primary">
+              VRIKA_LIGHTHOUSE_OPENAI_API_KEY
+            </code>{" "}
+            and{" "}
+            <code className="text-text-neutral-primary">
+              VRIKA_LIGHTHOUSE_MODEL
+            </code>{" "}
+            on the Cloud Security server.
+          </div>
+        </ContentLayout>
+      );
+    }
     return redirect(LIGHTHOUSE_ROUTE.SETTINGS);
   }
 
@@ -107,6 +132,16 @@ export default async function AIChatbot({
 
   // Handle errors or missing configuration
   if (providersConfig.errors || !providersConfig.providers) {
+    if (embedMode) {
+      return (
+        <ContentLayout title="Lighthouse AI" icon={<LighthouseIcon />}>
+          <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
+            AI assistant configuration is incomplete. Contact your Vrika
+            administrator.
+          </div>
+        </ContentLayout>
+      );
+    }
     return redirect(LIGHTHOUSE_ROUTE.SETTINGS);
   }
 
@@ -119,6 +154,7 @@ export default async function AIChatbot({
           defaultProviderId={providersConfig.defaultProviderId}
           defaultModelId={providersConfig.defaultModelId}
           initialPrompt={initialPrompt}
+          hideModelSelector={embedMode}
         />
       </div>
     </ContentLayout>

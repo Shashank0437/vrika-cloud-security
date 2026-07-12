@@ -8,8 +8,22 @@ export const VRIKA_EMBED_HIDDEN_MENU_LABELS = new Set([
   "Organization",
   "Support & Help",
   "Prowler Hub",
-  "Lighthouse AI",
 ]);
+
+/** Prowler routes blocked in Vrika embed (chat is allowed; settings are not). */
+export const VRIKA_EMBED_BLOCKED_ROUTE_PREFIXES = [
+  "/profile",
+  "/lighthouse/settings",
+  "/users",
+  "/invitations",
+  "/roles",
+] as const;
+
+export function isVrikaEmbedBlockedRoute(pathname: string): boolean {
+  return VRIKA_EMBED_BLOCKED_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 /** Product name shown in page titles and empty states. */
 export function getEmbedAppName(): string {

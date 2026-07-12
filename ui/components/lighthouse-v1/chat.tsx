@@ -38,6 +38,7 @@ import {
 import { useToast } from "@/components/shadcn";
 import { CustomLink } from "@/components/shadcn/custom/custom-link";
 import { useMountEffect } from "@/hooks/use-mount-effect";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
 interface Model {
@@ -63,6 +64,7 @@ interface ChatProps {
   defaultProviderId?: LighthouseProvider;
   defaultModelId?: string;
   initialPrompt?: string;
+  hideModelSelector?: boolean;
 }
 
 interface SelectedModel {
@@ -105,7 +107,10 @@ export const Chat = ({
   defaultProviderId,
   defaultModelId,
   initialPrompt,
+  hideModelSelector = false,
 }: ChatProps) => {
+  const embedMode = isVrikaEmbedMode();
+  const modelSelectorHidden = hideModelSelector || embedMode;
   const { toast } = useToast();
 
   // Consolidated UI state
@@ -360,21 +365,25 @@ export const Chat = ({
             className="max-w-md text-center shadow-lg"
           >
             <CardHeader>
-              <CardTitle>LLM Provider Configuration Required</CardTitle>
+              <CardTitle>AI assistant unavailable</CardTitle>
               <CardDescription>
-                Please configure an LLM provider to use Lighthouse AI.
+                {embedMode
+                  ? "Cloud Security AI is managed by your Vrika administrator."
+                  : "Please configure an LLM provider to use Lighthouse AI."}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <CustomLink
-                href="/lighthouse/settings"
-                className="bg-button-primary hover:bg-button-primary/90 inline-flex items-center justify-center rounded-md px-4 py-2 text-black"
-                target="_self"
-                size="sm"
-              >
-                Configure Provider
-              </CustomLink>
-            </CardContent>
+            {!embedMode && (
+              <CardContent>
+                <CustomLink
+                  href="/lighthouse/settings"
+                  className="bg-button-primary hover:bg-button-primary/90 inline-flex items-center justify-center rounded-md px-4 py-2 text-black"
+                  target="_self"
+                  size="sm"
+                >
+                  Configure Provider
+                </CustomLink>
+              </CardContent>
+            )}
           </Card>
         </div>
       )}
@@ -518,38 +527,43 @@ export const Chat = ({
 
           <PromptInputToolbar>
             <PromptInputTools>
-              {/* Model Selector - Combobox */}
-              <Combobox
-                value={`${selectedModel.providerType}:${selectedModel.modelId}`}
-                onValueChange={(value) => {
-                  const separatorIndex = value.indexOf(":");
-                  if (separatorIndex === -1) return;
+              {!modelSelectorHidden && (
+                <Combobox
+                  value={`${selectedModel.providerType}:${selectedModel.modelId}`}
+                  onValueChange={(value) => {
+                    const separatorIndex = value.indexOf(":");
+                    if (separatorIndex === -1) return;
 
-                  const providerType = value.slice(
-                    0,
-                    separatorIndex,
-                  ) as LighthouseProvider;
-                  const modelId = value.slice(separatorIndex + 1);
-                  const provider = providers.find((p) => p.id === providerType);
-                  const model = provider?.models.find((m) => m.id === modelId);
-                  if (provider && model) {
-                    handleModelSelect(providerType, modelId, model.name);
-                  }
-                }}
-                groups={providers.map((provider) => ({
-                  heading: provider.name,
-                  options: provider.models.map((model) => ({
-                    value: `${provider.id}:${model.id}`,
-                    label: model.name,
-                  })),
-                }))}
-                loading={loadingProviders.size > 0}
-                loadingMessage="Loading models..."
-                placeholder={selectedModel.modelName || "Select model..."}
-                searchPlaceholder="Search models..."
-                emptyMessage="No model found."
-                showSelectedFirst={true}
-              />
+                    const providerType = value.slice(
+                      0,
+                      separatorIndex,
+                    ) as LighthouseProvider;
+                    const modelId = value.slice(separatorIndex + 1);
+                    const provider = providers.find(
+                      (p) => p.id === providerType,
+                    );
+                    const model = provider?.models.find(
+                      (m) => m.id === modelId,
+                    );
+                    if (provider && model) {
+                      handleModelSelect(providerType, modelId, model.name);
+                    }
+                  }}
+                  groups={providers.map((provider) => ({
+                    heading: provider.name,
+                    options: provider.models.map((model) => ({
+                      value: `${provider.id}:${model.id}`,
+                      label: model.name,
+                    })),
+                  }))}
+                  loading={loadingProviders.size > 0}
+                  loadingMessage="Loading models..."
+                  placeholder={selectedModel.modelName || "Select model..."}
+                  searchPlaceholder="Search models..."
+                  emptyMessage="No model found."
+                  showSelectedFirst={true}
+                />
+              )}
             </PromptInputTools>
 
             {/* Submit Button */}

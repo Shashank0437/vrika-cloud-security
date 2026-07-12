@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextAuthRequest } from "next-auth";
 
 import { auth } from "@/auth.config";
-import { withAppPath, stripAppPath } from "@/lib/base-path";
-import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { stripAppPath, withAppPath } from "@/lib/base-path";
+import { isVrikaEmbedBlockedRoute, isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 const publicRoutes = [
   "/sign-in",
@@ -18,19 +18,6 @@ const publicRoutes = [
 const isPublicRoute = (pathname: string): boolean => {
   return publicRoutes.some((route) => pathname.startsWith(route));
 };
-
-const VRIKA_EMBED_BLOCKED_PREFIXES = [
-  "/profile",
-  "/lighthouse",
-  "/users",
-  "/invitations",
-  "/roles",
-] as const;
-
-const isVrikaEmbedBlockedRoute = (pathname: string): boolean =>
-  VRIKA_EMBED_BLOCKED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
 
 // NextAuth's auth() wrapper - renamed from middleware to proxy
 export default auth((req: NextAuthRequest) => {
@@ -60,7 +47,12 @@ export default auth((req: NextAuthRequest) => {
   }
 
   if (isVrikaEmbedMode() && isVrikaEmbedBlockedRoute(pathname)) {
-    return NextResponse.redirect(new URL(withAppPath("/"), req.nextUrl.origin));
+    const redirectPath = pathname.startsWith("/lighthouse/settings")
+      ? "/lighthouse"
+      : "/";
+    return NextResponse.redirect(
+      new URL(withAppPath(redirectPath), req.nextUrl.origin),
+    );
   }
 
   if (user?.permissions) {

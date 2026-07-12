@@ -52,7 +52,9 @@ function filterVrikaEmbedMenus(groups: GroupProps[]): GroupProps[] {
         .map((menu) => ({
           ...menu,
           submenus: menu.submenus?.filter(
-            (submenu) => !VRIKA_EMBED_HIDDEN_MENU_LABELS.has(submenu.label),
+            (submenu) =>
+              !VRIKA_EMBED_HIDDEN_MENU_LABELS.has(submenu.label) &&
+              !submenu.href.startsWith("/lighthouse/settings"),
           ),
         })),
     }))
