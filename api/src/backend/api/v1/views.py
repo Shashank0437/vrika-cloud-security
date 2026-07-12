@@ -332,6 +332,7 @@ from tasks.tasks import (
     delete_provider_task,
     delete_tenant_task,
     enqueue_scan_execution_on_commit,
+    generate_vrika_scan_pdf_task,
     get_active_provider_scan,
     jira_integration_task,
     mute_historical_findings_task,
@@ -2759,18 +2760,28 @@ class ScanViewSet(BaseRLSViewSet):
         if isinstance(loader, Response):
             if loader.status_code == status.HTTP_404_NOT_FOUND:
                 from django.core.cache import cache
-                from tasks.tasks import generate_vrika_scan_pdf_task
 
                 lock_key = f"vrika-{variant}-pdf:{scan.id}"
                 if not cache.get(lock_key):
                     cache.set(lock_key, True, timeout=3600)
-                    generate_vrika_scan_pdf_task.apply_async(
-                        kwargs={
-                            "tenant_id": str(scan.tenant_id),
-                            "scan_id": str(scan.id),
-                            "provider_id": str(scan.provider_id),
-                            "variant": variant,
-                        }
+                    task_id = str(uuid.uuid4())
+                    create_scan_task_record(
+                        tenant_id=str(scan.tenant_id),
+                        task_id=task_id,
+                        task_name="scan-vrika-scan-report",
+                    )
+                    transaction.on_commit(
+                        lambda task_id=task_id: (
+                            generate_vrika_scan_pdf_task.apply_async(
+                                kwargs={
+                                    "tenant_id": str(scan.tenant_id),
+                                    "scan_id": str(scan.id),
+                                    "provider_id": str(scan.provider_id),
+                                    "variant": variant,
+                                },
+                                task_id=task_id,
+                            )
+                        )
                     )
                 label = "executive" if variant == "executive" else "full"
                 return Response(
