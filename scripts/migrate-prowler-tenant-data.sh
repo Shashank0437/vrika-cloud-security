@@ -128,6 +128,51 @@ migrate_postgres() {
 
   echo "=== Migrating postgres tenant_id: $source -> $target ==="
 
+  echo "=== Removing duplicate empty providers on TARGET (same cloud account as SOURCE) ==="
+  pg_psql <<SQL
+-- Bridge often creates an empty provider on TARGET with the same AWS/GCP uid as SOURCE.
+DELETE FROM provider_secrets
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
+);
+
+DELETE FROM integration_provider_mappings
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
+);
+
+DELETE FROM provider_group_memberships
+WHERE provider_id IN (
+  SELECT tp.id
+  FROM providers sp
+  JOIN providers tp
+    ON tp.provider = sp.provider AND tp.uid = sp.uid
+  WHERE sp.tenant_id = '$source'::uuid
+    AND tp.tenant_id = '$target'::uuid
+    AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id)
+);
+
+DELETE FROM providers tp
+USING providers sp
+WHERE sp.tenant_id = '$source'::uuid
+  AND tp.tenant_id = '$target'::uuid
+  AND tp.provider = sp.provider
+  AND tp.uid = sp.uid
+  AND NOT EXISTS (SELECT 1 FROM scans s WHERE s.provider_id = tp.id);
+SQL
+
   pg_psql <<SQL
 BEGIN;
 
