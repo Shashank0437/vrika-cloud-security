@@ -567,11 +567,21 @@ neo4j_db_exists() {
     "SHOW DATABASE \`$db\` YIELD name RETURN count(*) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0
 }
 
+neo4j_progress() {
+  echo ">> $*"
+}
+
 neo4j_node_count() {
   local db="$1"
+  local hint="${2:-}"
   if [[ "$(neo4j_db_exists "$db")" == "0" ]]; then
     echo 0
     return
+  fi
+  if [[ -n "$hint" ]]; then
+    neo4j_progress "$hint"
+  else
+    neo4j_progress "Counting nodes in $db (large graphs can take 1-3 minutes)..."
   fi
   neo4j_cypher "$db" "MATCH (n) RETURN count(n) AS c;" 2>/dev/null | tail -1 | tr -d '[:space:]' || echo 0
 }
@@ -643,23 +653,29 @@ neo4j_resume_all() {
   neo4j_resume_graph_clients
 }
 
+neo4j_fix_conf_permissions_sh() {
+  cat <<'SH'
+set -e
+if [ -d /var/lib/neo4j/conf ]; then
+  for f in /var/lib/neo4j/conf/*.conf; do
+    [ -f "$f" ] || continue
+    chmod 640 "$f"
+  done
+fi
+SH
+}
+
 neo4j_admin_offline() {
   "${COMPOSE[@]}" run --rm --no-deps --user neo4j --entrypoint sh neo4j \
-    -c 'set -e
-if [ -f /var/lib/neo4j/conf/neo4j.conf ]; then
-  chmod 640 /var/lib/neo4j/conf/neo4j.conf
-fi
-exec neo4j-admin "$@"' \
+    -c "$(neo4j_fix_conf_permissions_sh)
+exec neo4j-admin \"\$@\"" \
     _ "$@"
 }
 
 neo4j_container_sh() {
   "${COMPOSE[@]}" run --rm --no-deps --user neo4j --entrypoint sh neo4j \
-    -c 'set -e
-if [ -f /var/lib/neo4j/conf/neo4j.conf ]; then
-  chmod 640 /var/lib/neo4j/conf/neo4j.conf
-fi
-"$@"' \
+    -c "$(neo4j_fix_conf_permissions_sh)
+\"\$@\"" \
     _ "$@"
 }
 
@@ -802,10 +818,13 @@ migrate_neo4j() {
   dst_db="db-tenant-$(lowercase_uuid "$target")"
 
   echo "=== Neo4j attack-path graphs: $src_db -> $dst_db ==="
+  neo4j_progress "Large graphs (~200k nodes) need 5-15 minutes. Do not Ctrl+C until you see 'Neo4j database copied' or an ERROR."
 
+  neo4j_progress "Ensuring Neo4j container is running..."
   neo4j_ensure_server_running
   sleep 2
 
+  neo4j_progress "Checking source database exists..."
   if [[ "$(neo4j_db_exists "$src_db")" == "0" ]]; then
     echo "No source Neo4j database ($src_db)."
     if [[ "$(neo4j_db_exists "$dst_db")" != "0" ]]; then
@@ -817,8 +836,8 @@ migrate_neo4j() {
     return 0
   fi
 
-  src_nodes="$(neo4j_node_count "$src_db")"
-  dst_nodes="$(neo4j_node_count "$dst_db")"
+  src_nodes="$(neo4j_node_count "$src_db" "Counting source nodes in $src_db...")"
+  dst_nodes="$(neo4j_node_count "$dst_db" "Counting target nodes in $dst_db...")"
   echo "Source nodes: $src_nodes | Target nodes: $dst_nodes"
 
   if [[ "$src_nodes" == "0" ]]; then
@@ -834,10 +853,11 @@ migrate_neo4j() {
   fi
 
   if [[ "$(neo4j_db_exists "$dst_db")" != "0" ]]; then
-    echo "Dropping existing target Neo4j database ($dst_db) before copy..."
+    neo4j_progress "Dropping existing target Neo4j database ($dst_db) before copy..."
     neo4j_drop_database "$dst_db"
   fi
 
+  neo4j_progress "Starting offline dump/load copy (~209k nodes: expect several minutes)..."
   if neo4j_copy_database_admin "$src_db" "$dst_db"; then
     echo "Neo4j database copied successfully via offline dump/load."
   else
@@ -849,9 +869,11 @@ migrate_neo4j() {
     return 1
   fi
 
-  dst_nodes="$(neo4j_node_count "$dst_db")"
+  dst_nodes="$(neo4j_node_count "$dst_db" "Verifying target node count after copy...")"
   echo "Target nodes after copy: $dst_nodes"
+  neo4j_progress "Relabeling tenant/provider graph labels for target tenant..."
   relabel_neo4j_graph "$source" "$target" "$dst_db"
+  neo4j_progress "Neo4j migration complete."
 }
 
 run_attack_paths_verify() {
@@ -880,7 +902,7 @@ run_attack_paths_verify() {
   "
 
   neo4j_ensure_server_running
-  dst_nodes="$(neo4j_node_count "$dst_db")"
+  dst_nodes="$(neo4j_node_count "$dst_db" "Counting target Neo4j nodes (may take 1-2 min)...")"
   echo ""
   echo "Target Neo4j nodes ($dst_db): $dst_nodes"
 
