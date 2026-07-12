@@ -2146,7 +2146,15 @@ class ScanViewSet(BaseRLSViewSet):
             "compliance": ScanComplianceReportSerializer,
             "compliance_ocsf": ScanComplianceReportSerializer,
         }
-        response_only_actions = {"threatscore", "ens", "nis2", "csa", "cis"}
+        response_only_actions = {
+            "threatscore",
+            "ens",
+            "nis2",
+            "csa",
+            "cis",
+            "vrika_report_executive",
+            "vrika_report_full",
+        }
 
         if self.action in action_defaults or self.action in response_only_actions:
             if hasattr(self, "response_serializer_class"):
