@@ -1,6 +1,7 @@
 import { ReactNode, Suspense } from "react";
 
 import { FeedsServer } from "@/components/feeds";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 import {
   FeedsLoadingFallback,
@@ -23,9 +24,11 @@ export function Navbar({ title, icon, onboardingAction }: NavbarProps) {
       icon={icon}
       onboardingAction={onboardingAction}
       feedsSlot={
-        <Suspense key="feeds" fallback={<FeedsLoadingFallback />}>
-          <FeedsServer limit={15} />
-        </Suspense>
+        isVrikaEmbedMode() ? undefined : (
+          <Suspense key="feeds" fallback={<FeedsLoadingFallback />}>
+            <FeedsServer limit={15} />
+          </Suspense>
+        )
       }
     />
   );

@@ -609,3 +609,30 @@ input:-webkit-autofill:active {
     user-select: text;
   }
 }
+
+/* Vrika embed — match Vrika client purple theme (see vrika-server/client/globals.css) */
+html[data-vrika-embed="true"] {
+  --bg-button-primary: #684cb6;
+  --bg-button-primary-hover: #5b3fa9;
+  --bg-button-primary-press: #5b3fa9;
+  --border-input-primary-pressed: #e9ddff;
+  --bg-neutral-primary: #fdfcff;
+  --bg-neutral-secondary: #ffffff;
+  --bg-neutral-tertiary: #f6f5ff;
+  --bg-tag-primary: #ebe9f4;
+  --text-neutral-primary: #1b1b21;
+  --text-neutral-secondary: #45464f;
+  --border-neutral-primary: #c6c5d0;
+  --bg-radar-button: #684cb6;
+  --shadow-progress-glow: 0 0 10px #684cb6, 0 0 5px #684cb6;
+}
+
+html[data-vrika-embed="true"].dark {
+  --bg-button-primary: #684cb6;
+  --bg-button-primary-hover: #7b5ea7;
+  --bg-button-primary-press: #5b3fa9;
+  --border-input-primary-pressed: #3d2f66;
+  --bg-radar-button: #684cb6;
+  --shadow-progress-glow: 0 0 10px rgba(104, 76, 182, 0.6),
+    0 0 5px rgba(104, 76, 182, 0.4);
+}

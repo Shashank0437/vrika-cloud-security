@@ -39,6 +39,7 @@ const getConfigurationSubmenu = (label: string) =>
 describe("getMenuList", () => {
   afterEach(() => {
     delete process.env.NEXT_PUBLIC_IS_CLOUD_ENV;
+    delete process.env.NEXT_PUBLIC_VRIKA_EMBED_MODE;
   });
 
   describe("API reference link", () => {
@@ -182,5 +183,24 @@ describe("getMenuList", () => {
     expect(labels).not.toContain("Lighthouse AI");
     expect(configLabels).toContain("Lighthouse AI");
     expect(lighthouseSettings?.href).toBe("/lighthouse/settings");
+  });
+
+  describe("Vrika embed mode", () => {
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_VRIKA_EMBED_MODE = "true";
+    });
+
+    it("should hide org, support, hub, and lighthouse nav items", () => {
+      const labels = getTopLevelLabels();
+      const configLabels = getConfigurationLabels();
+
+      expect(labels).not.toContain("Organization");
+      expect(labels).not.toContain("Support & Help");
+      expect(labels).not.toContain("Prowler Hub");
+      expect(labels).not.toContain("Lighthouse AI");
+      expect(configLabels).not.toContain("Lighthouse AI");
+      expect(labels).toContain("Overview");
+      expect(labels).toContain("Compliance");
+    });
   });
 });

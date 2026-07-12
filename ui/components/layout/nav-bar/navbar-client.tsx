@@ -11,6 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/shadcn";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useSidebar } from "@/hooks/use-sidebar";
 import { getFlowById } from "@/lib/onboarding";
@@ -128,8 +129,8 @@ export function NavbarClient({
         </div>
         <div className="flex flex-1 items-center justify-end gap-3">
           <ThemeSwitch />
-          {feedsSlot}
-          <UserNav />
+          {!isVrikaEmbedMode() && feedsSlot}
+          {!isVrikaEmbedMode() && <UserNav />}
         </div>
       </div>
     </header>

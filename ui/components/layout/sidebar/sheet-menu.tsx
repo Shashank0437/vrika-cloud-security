@@ -12,8 +12,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/shadcn/sheet";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 
 export function SheetMenu() {
+  const embedMode = isVrikaEmbedMode();
   return (
     <Sheet>
       <SheetTrigger className="lg:hidden" asChild>
@@ -25,15 +27,17 @@ export function SheetMenu() {
         <SheetHeader>
           <SheetTitle className="sr-only">Sidebar</SheetTitle>
           <SheetDescription className="sr-only" />
-          <Button
-            className="flex items-center justify-center pt-1 pb-2"
-            variant="link"
-            asChild
-          >
-            <Link href="/" className="flex items-center gap-2">
-              <ProwlerExtended />
-            </Link>
-          </Button>
+          {!embedMode && (
+            <Button
+              className="flex items-center justify-center pt-1 pb-2"
+              variant="link"
+              asChild
+            >
+              <Link href="/" className="flex items-center gap-2">
+                <ProwlerExtended />
+              </Link>
+            </Button>
+          )}
         </SheetHeader>
         <Menu isOpen />
       </SheetContent>

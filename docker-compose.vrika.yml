@@ -23,6 +23,7 @@ services:
       target: prod
       args:
         NEXT_PUBLIC_BASE_PATH: /prowler
+        NEXT_PUBLIC_VRIKA_EMBED_MODE: "true"
         NEXT_PUBLIC_PROWLER_RELEASE_VERSION: ${NEXT_PUBLIC_PROWLER_RELEASE_VERSION:-v5.34.0}
     image: vrika-prowler-ui:local
     ports: !reset []

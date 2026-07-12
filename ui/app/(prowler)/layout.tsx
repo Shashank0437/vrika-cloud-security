@@ -19,6 +19,7 @@ import { TaskPollingWatcher } from "@/components/shared/task-polling-watcher";
 import { fontMono, fontSans } from "@/config/fonts";
 import { siteConfig } from "@/config/site";
 import { isCloud } from "@/lib/shared/env";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { cn } from "@/lib/utils";
 import { StoreInitializer } from "@/store/ui/store-initializer";
 import { SCAN_STATES } from "@/types/attack-paths";
@@ -77,7 +78,11 @@ export default async function RootLayout({
   }
 
   return (
-    <html suppressHydrationWarning lang="en">
+    <html
+      suppressHydrationWarning
+      lang="en"
+      {...(isVrikaEmbedMode() ? { "data-vrika-embed": "true" } : {})}
+    >
       <head>
         <RuntimePublicConfig />
       </head>

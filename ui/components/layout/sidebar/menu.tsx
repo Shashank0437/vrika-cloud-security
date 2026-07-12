@@ -21,6 +21,7 @@ import { useRuntimeConfig } from "@/hooks/use-runtime-config";
 import { SIDEBAR_NAVIGATION_MODE, useSidebar } from "@/hooks/use-sidebar";
 import { getMenuList } from "@/lib/menu-list";
 import { LAUNCH_SCAN_HREF } from "@/lib/scans-navigation";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { cn } from "@/lib/utils";
 import { useScansStore } from "@/store";
 import { GroupProps } from "@/types";
@@ -67,6 +68,7 @@ export const Menu = ({ isOpen }: { isOpen: boolean }) => {
   const isScansPage = pathname.startsWith("/scans");
   const { apiDocsUrl } = useRuntimeConfig();
   const isCloudEnv = process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true";
+  const embedMode = isVrikaEmbedMode();
   const navigationMode = useSidebar((state) => state.navigationMode);
   const setNavigationMode = useSidebar((state) => state.setNavigationMode);
 
@@ -116,16 +118,20 @@ export const Menu = ({ isOpen }: { isOpen: boolean }) => {
         </Tooltip>
       </div>
 
-      <SidebarNavigationModeToggle
-        isOpen={isOpen}
-        value={navigationMode}
-        onChange={setNavigationMode}
-        chatEnabled={isCloudEnv}
-      />
+      {!embedMode && (
+        <SidebarNavigationModeToggle
+          isOpen={isOpen}
+          value={navigationMode}
+          onChange={setNavigationMode}
+          chatEnabled={isCloudEnv}
+        />
+      )}
 
       {/* Menu Items */}
       <div className="flex-1 overflow-hidden">
-        {isCloudEnv && navigationMode === SIDEBAR_NAVIGATION_MODE.CHAT ? (
+        {!embedMode &&
+        isCloudEnv &&
+        navigationMode === SIDEBAR_NAVIGATION_MODE.CHAT ? (
           <LighthouseV2SidebarChat isOpen={isOpen} />
         ) : (
           <ScrollArea className="h-full [&>div>div[style]]:block!">

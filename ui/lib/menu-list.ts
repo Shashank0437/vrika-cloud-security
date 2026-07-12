@@ -29,11 +29,34 @@ import {
 } from "@/components/icons/Icons";
 import { GroupProps } from "@/types";
 
+import {
+  isVrikaEmbedMode,
+  VRIKA_EMBED_HIDDEN_MENU_LABELS,
+} from "./vrika-embed";
+
 interface MenuListOptions {
   pathname: string;
   // Passed in (not read here) so the island isn't read during SSR — that would
   // cause a hydration mismatch. See useRuntimeConfig.
   apiDocsUrl?: string | null;
+}
+
+function filterVrikaEmbedMenus(groups: GroupProps[]): GroupProps[] {
+  if (!isVrikaEmbedMode()) return groups;
+
+  return groups
+    .map((group) => ({
+      ...group,
+      menus: group.menus
+        .filter((menu) => !VRIKA_EMBED_HIDDEN_MENU_LABELS.has(menu.label))
+        .map((menu) => ({
+          ...menu,
+          submenus: menu.submenus?.filter(
+            (submenu) => !VRIKA_EMBED_HIDDEN_MENU_LABELS.has(submenu.label),
+          ),
+        })),
+    }))
+    .filter((group) => group.menus.length > 0);
 }
 
 export const getMenuList = ({
@@ -42,7 +65,7 @@ export const getMenuList = ({
 }: MenuListOptions): GroupProps[] => {
   const isCloudEnv = process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true";
 
-  return [
+  const groups: GroupProps[] = [
     {
       groupLabel: "",
       menus: [
@@ -238,4 +261,6 @@ export const getMenuList = ({
       ],
     },
   ];
+
+  return filterVrikaEmbedMenus(groups);
 };
