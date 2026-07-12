@@ -164,89 +164,63 @@ print('Queued task id:', result.id)
   echo "Watch worker logs: docker compose -f docker-compose.yml -f docker-compose.vrika.yml logs -f worker"
 }
 
-prepare_target_for_merge() {
+merge_duplicate_providers() {
   local source="$1"
   local target="$2"
 
-  echo "=== Preparing TARGET for merge (remove partial Vrika-bridge junk) ==="
+  echo "=== Merging duplicate cloud providers (keep TESTCORP + add OLD data) ==="
   pg_psql <<SQL
--- TARGET often has an in-flight scan + duplicate provider from the embed bridge.
--- Remove incomplete scans and their findings so SOURCE data can merge cleanly.
+BEGIN;
 
-DELETE FROM resource_finding_mappings
-WHERE finding_id IN (SELECT id FROM findings WHERE tenant_id = '$target'::uuid);
+DO \$\$
+DECLARE
+  pair RECORD;
+  r RECORD;
+  updated BIGINT;
+BEGIN
+  FOR pair IN
+    SELECT sp.id AS source_provider_id, tp.id AS target_provider_id
+    FROM providers sp
+    JOIN providers tp
+      ON tp.provider = sp.provider AND tp.uid = sp.uid
+    WHERE sp.tenant_id = '$source'::uuid
+      AND tp.tenant_id = '$target'::uuid
+  LOOP
+    RAISE NOTICE 'Re-pointing data from source provider % to target provider %',
+      pair.source_provider_id, pair.target_provider_id;
 
-DELETE FROM findings WHERE tenant_id = '$target'::uuid;
+    FOR r IN
+      SELECT DISTINCT c.table_name, c.column_name
+      FROM information_schema.columns c
+      JOIN information_schema.tables t
+        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+      WHERE c.table_schema = 'public'
+        AND c.column_name = 'provider_id'
+        AND t.table_type = 'BASE TABLE'
+        AND c.table_name <> 'providers'
+      ORDER BY c.table_name
+    LOOP
+      EXECUTE format(
+        'UPDATE %I SET %I = %L::uuid WHERE %I = %L::uuid',
+        r.table_name, r.column_name,
+        pair.target_provider_id, r.column_name, pair.source_provider_id
+      );
+      GET DIAGNOSTICS updated = ROW_COUNT;
+      IF updated > 0 THEN
+        RAISE NOTICE '  Updated % rows in %.%', updated, r.table_name, r.column_name;
+      END IF;
+    END LOOP;
 
-DELETE FROM attack_paths_scans WHERE tenant_id = '$target'::uuid;
+    DELETE FROM provider_secrets WHERE provider_id = pair.source_provider_id;
+    DELETE FROM integration_provider_mappings WHERE provider_id = pair.source_provider_id;
+    DELETE FROM provider_group_memberships WHERE provider_id = pair.source_provider_id;
+    DELETE FROM providers WHERE id = pair.source_provider_id;
+    RAISE NOTICE 'Removed duplicate source provider %', pair.source_provider_id;
+  END LOOP;
+END \$\$;
 
-DELETE FROM scan_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM daily_severity_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM finding_group_daily_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM compliance_overview_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM compliance_requirements_overviews WHERE tenant_id = '$target'::uuid;
-DELETE FROM threatscore_snapshots WHERE tenant_id = '$target'::uuid;
-DELETE FROM attack_surface_overviews WHERE tenant_id = '$target'::uuid;
-DELETE FROM provider_compliance_scores WHERE tenant_id = '$target'::uuid;
-DELETE FROM resource_scan_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM scan_category_summaries WHERE tenant_id = '$target'::uuid;
-DELETE FROM scan_resource_group_summaries WHERE tenant_id = '$target'::uuid;
-
-DELETE FROM scans WHERE tenant_id = '$target'::uuid;
-
--- Drop duplicate cloud account provider on TARGET (same uid as SOURCE, no scans left).
-DELETE FROM provider_secrets
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-);
-
-DELETE FROM integration_provider_mappings
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-);
-
-DELETE FROM provider_group_memberships
-WHERE provider_id IN (
-  SELECT tp.id
-  FROM providers sp
-  JOIN providers tp
-    ON tp.provider = sp.provider AND tp.uid = sp.uid
-  WHERE sp.tenant_id = '$source'::uuid
-    AND tp.tenant_id = '$target'::uuid
-);
-
-DELETE FROM providers tp
-USING providers sp
-WHERE sp.tenant_id = '$source'::uuid
-  AND tp.tenant_id = '$target'::uuid
-  AND tp.provider = sp.provider
-  AND tp.uid = sp.uid;
+COMMIT;
 SQL
-
-  echo "=== TARGET state after cleanup ==="
-  pg_psql -c "
-    SELECT
-      (SELECT COUNT(*) FROM scans WHERE tenant_id = '$target'::uuid) AS scans,
-      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$target'::uuid) AS findings,
-      (SELECT COUNT(*) FROM providers WHERE tenant_id = '$target'::uuid) AS providers;
-  "
-  echo "=== SOURCE state (data to merge) ==="
-  pg_psql -c "
-    SELECT
-      (SELECT COUNT(*) FROM scans WHERE tenant_id = '$source'::uuid) AS scans,
-      (SELECT COUNT(*) FROM findings WHERE tenant_id = '$source'::uuid) AS findings,
-      (SELECT COUNT(*) FROM scan_summaries WHERE tenant_id = '$source'::uuid) AS scan_summaries;
-  "
 }
 
 migrate_postgres() {
@@ -274,9 +248,9 @@ migrate_postgres() {
     sleep 3
   fi
 
-  echo "=== Migrating postgres tenant_id: $source -> $target ==="
+  echo "=== Additive merge: OLD tenant data -> TESTCORP (keeps existing TESTCORP rows) ==="
 
-  prepare_target_for_merge "$source" "$target"
+  merge_duplicate_providers "$source" "$target"
 
   pg_psql <<SQL
 BEGIN;
@@ -347,9 +321,7 @@ migrate_neo4j() {
   fi
 
   if [[ "$dst_exists" != "0" ]]; then
-    echo "Target Neo4j database already exists ($dst_db). Dropping empty/partial copy first..."
-    "${COMPOSE[@]}" exec -T neo4j cypher-shell -u "$NEO4J_USER" -p "$NEO4J_PASSWORD" -d system \
-      "DROP DATABASE \`$dst_db\` IF EXISTS;" || true
+    echo "Target Neo4j database already exists ($dst_db). Keeping both; source graph copied if supported."
   fi
 
   echo "Creating $dst_db as copy of $src_db ..."
