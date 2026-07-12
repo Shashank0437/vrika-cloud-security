@@ -644,7 +644,23 @@ neo4j_resume_all() {
 }
 
 neo4j_admin_offline() {
-  "${COMPOSE[@]}" run --rm --no-deps --entrypoint neo4j-admin neo4j "$@"
+  "${COMPOSE[@]}" run --rm --no-deps --user neo4j --entrypoint sh neo4j \
+    -c 'set -e
+if [ -f /var/lib/neo4j/conf/neo4j.conf ]; then
+  chmod 640 /var/lib/neo4j/conf/neo4j.conf
+fi
+exec neo4j-admin "$@"' \
+    _ "$@"
+}
+
+neo4j_container_sh() {
+  "${COMPOSE[@]}" run --rm --no-deps --user neo4j --entrypoint sh neo4j \
+    -c 'set -e
+if [ -f /var/lib/neo4j/conf/neo4j.conf ]; then
+  chmod 640 /var/lib/neo4j/conf/neo4j.conf
+fi
+"$@"' \
+    _ "$@"
 }
 
 neo4j_drop_database() {
@@ -658,48 +674,48 @@ neo4j_copy_database_admin() {
   local dst_db="$2"
   local dump_id="tenant-copy-$$"
   local dump_dir="/data/migrate-dumps/${dump_id}"
-  local dump_dir_host="$ROOT/_data/neo4j/migrate-dumps/${dump_id}"
 
   neo4j_pause_graph_clients
   trap neo4j_resume_all EXIT
 
   neo4j_stop_server
 
-  mkdir -p "$dump_dir_host"
-  chmod 700 "$dump_dir_host"
+  echo "Preparing dump directory inside Neo4j data volume..."
+  neo4j_container_sh mkdir -p "$dump_dir"
+  neo4j_container_sh chmod 700 "$dump_dir"
 
   echo "Dumping $src_db (Neo4j server offline) ..."
   if ! neo4j_admin_offline database dump \
     --expand-commands "$src_db" --to-path="$dump_dir" --verbose; then
     echo "neo4j-admin database dump failed." >&2
-    rm -rf "$dump_dir_host"
+    neo4j_container_sh rm -rf "$dump_dir" || true
     trap - EXIT
     neo4j_resume_all
     return 1
   fi
 
   echo "Renaming dump archive for target database name ..."
-  if [[ ! -f "$dump_dir_host/${src_db}.dump" ]]; then
-    echo "Dump file not found: $dump_dir_host/${src_db}.dump" >&2
-    ls -la "$dump_dir_host" >&2 || true
-    rm -rf "$dump_dir_host"
+  if ! neo4j_container_sh test -f "$dump_dir/${src_db}.dump"; then
+    echo "Dump file not found: $dump_dir/${src_db}.dump" >&2
+    neo4j_container_sh ls -la "$dump_dir" || true
+    neo4j_container_sh rm -rf "$dump_dir" || true
     trap - EXIT
     neo4j_resume_all
     return 1
   fi
-  mv "$dump_dir_host/${src_db}.dump" "$dump_dir_host/${dst_db}.dump"
+  neo4j_container_sh mv "$dump_dir/${src_db}.dump" "$dump_dir/${dst_db}.dump"
 
   echo "Loading $dst_db from dump ..."
   if ! neo4j_admin_offline database load \
     --expand-commands "$dst_db" --from-path="$dump_dir" --overwrite-destination=true --verbose; then
     echo "neo4j-admin database load failed." >&2
-    rm -rf "$dump_dir_host"
+    neo4j_container_sh rm -rf "$dump_dir" || true
     trap - EXIT
     neo4j_resume_all
     return 1
   fi
 
-  rm -rf "$dump_dir_host"
+  neo4j_container_sh rm -rf "$dump_dir" || true
 
   neo4j_start_server
   neo4j_cypher system "CREATE DATABASE \`$dst_db\` IF NOT EXISTS;" 2>&1 || true
