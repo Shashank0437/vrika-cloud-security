@@ -546,10 +546,10 @@
   {
     "section": "dependencies",
     "name": "react-hook-form",
-    "from": "7.62.0",
-    "to": null,
+    "from": null,
+    "to": "7.62.0",
     "strategy": "installed",
-    "generatedAt": "2026-07-12T05:06:13.330Z"
+    "generatedAt": "2026-07-12T05:06:35.127Z"
   },
   {
     "section": "dependencies",
