@@ -14,6 +14,32 @@ import { checkTaskStatus } from "@/lib/helper";
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
+/** Map platform LLM provider names (e.g. openrouter) to Prowler Lighthouse types. */
+function normalizeLighthouseProvider(
+  raw: string | undefined,
+  usingOpenRouter: boolean,
+  hasCustomBaseUrl: boolean,
+): LighthouseProvider {
+  const value = raw?.trim().toLowerCase();
+  if (value === "bedrock") {
+    return "bedrock";
+  }
+  if (
+    value === "openai_compatible" ||
+    value === "openai-compatible" ||
+    value === "openrouter"
+  ) {
+    return "openai_compatible";
+  }
+  if (value === "openai") {
+    return usingOpenRouter || hasCustomBaseUrl ? "openai_compatible" : "openai";
+  }
+  if (usingOpenRouter || hasCustomBaseUrl) {
+    return "openai_compatible";
+  }
+  return "openai";
+}
+
 function readEmbedLighthouseEnv() {
   const apiKey =
     process.env.VRIKA_LLM_API_KEY?.trim() ||
@@ -29,14 +55,15 @@ function readEmbedLighthouseEnv() {
   const usingOpenRouter =
     apiKey.startsWith("sk-or-") || baseUrl?.includes("openrouter.ai") === true;
 
-  const provider = (process.env.VRIKA_LIGHTHOUSE_PROVIDER?.trim() ||
-    process.env.VRIKA_LLM_PROVIDER?.trim()?.replace(
-      /^openai$/,
-      "openai_compatible",
-    ) ||
-    (usingOpenRouter || baseUrl
-      ? "openai_compatible"
-      : "openai")) as LighthouseProvider;
+  const explicitProvider =
+    process.env.VRIKA_LIGHTHOUSE_PROVIDER?.trim() ||
+    process.env.VRIKA_LLM_PROVIDER?.trim();
+
+  const provider = normalizeLighthouseProvider(
+    explicitProvider,
+    usingOpenRouter,
+    Boolean(baseUrl),
+  );
 
   const rawModel =
     process.env.VRIKA_LLM_MODEL?.trim() ||
