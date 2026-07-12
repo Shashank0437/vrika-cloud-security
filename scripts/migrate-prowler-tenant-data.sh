@@ -779,7 +779,7 @@ relabel_neo4j_graph() {
       neo4j_cypher "$dst_db" "
         MATCH (acc:\`$root_label\` {id: '$provider_uid'})
         RETURN [label IN labels(acc) WHERE label STARTS WITH '_Provider_'][0];
-      " 2>/dev/null | tail -1 | tr -d '[:space:]' || true
+      " 2>/dev/null | tail -1 | tr -d '[:space:]' | tr -d '"' || true
     )"
 
     new_provider_label="$(provider_label "$new_provider_id")"
