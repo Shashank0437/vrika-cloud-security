@@ -10,6 +10,13 @@ if grep -rq 'from "../providers"' ui/app/ 2>/dev/null; then
   exit 1
 fi
 
+# Stray ui/layout.tsx (outside app/) breaks `pnpm run build` typecheck — not a valid App Router layout.
+if [[ -f ui/layout.tsx ]]; then
+  echo "ERROR: remove stale ui/layout.tsx (use ui/app/(prowler)/layout.tsx only):" >&2
+  echo "  rm -f ui/layout.tsx" >&2
+  exit 1
+fi
+
 # --no-cache: avoid stale COPY layers serving old layout.tsx after git pull.
 $COMPOSE build --no-cache ui
 $COMPOSE up -d ui nginx --force-recreate
