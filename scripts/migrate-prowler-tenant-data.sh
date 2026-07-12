@@ -155,7 +155,7 @@ run_backfill() {
   echo "=== Queueing overview reaggregation (scan_summaries, severity charts, etc.) ==="
   "${COMPOSE[@]}" exec -T api uv run python manage.py shell -c "
 from tasks.tasks import reaggregate_all_finding_group_summaries_task
-result = reaggregate_all_finding_group_summaries_task.delay('$target')
+result = reaggregate_all_finding_group_summaries_task.delay(tenant_id='$target')
 print('Queued task id:', result.id)
 "
 
