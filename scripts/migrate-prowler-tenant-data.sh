@@ -196,6 +196,7 @@ BEGIN
         ON t.table_schema = c.table_schema AND t.table_name = c.table_name
       WHERE c.table_schema = 'public'
         AND c.column_name = 'provider_id'
+        AND c.data_type = 'uuid'
         AND t.table_type = 'BASE TABLE'
         AND c.table_name <> 'providers'
       ORDER BY c.table_name
