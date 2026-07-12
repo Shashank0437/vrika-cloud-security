@@ -34,12 +34,18 @@ export function toAppRouterPath(path: string): string {
   return normalizeBridgePath(path);
 }
 
-export function postPathnameToParent(pathname: string): void {
+export function postPathnameToParent(pathname: string, search = ""): void {
   if (typeof window === "undefined" || window.parent === window) return;
+
+  const searchPart = search.startsWith("?")
+    ? search
+    : search
+      ? `?${search}`
+      : "";
 
   const message: VrikaPathnameMessage = {
     type: VRIKA_PATHNAME_MESSAGE,
-    path: normalizeBridgePath(pathname),
+    path: normalizeBridgePath(`${pathname}${searchPart}`),
   };
 
   window.parent.postMessage(message, window.location.origin);

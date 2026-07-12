@@ -109,7 +109,11 @@ export default async function RootLayout({
           <Suspense>
             <NavigationProgress />
           </Suspense>
-          {embedMode && <VrikaParentBridge />}
+          {embedMode && (
+            <Suspense fallback={null}>
+              <VrikaParentBridge />
+            </Suspense>
+          )}
           {/* Store uses boolean; gate receives tri-state to fail open on fetch errors. */}
           <StoreInitializer values={{ hasProviders: hasProviders ?? false }} />
           {onboardingEnabled && (

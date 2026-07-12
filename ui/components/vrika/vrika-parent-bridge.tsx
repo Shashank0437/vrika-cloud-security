@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo } from "react";
 
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import {
@@ -15,7 +15,17 @@ import {
 
 export function VrikaParentBridge() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
+
+  const searchString = searchParams.toString();
+  const currentBridgePath = useMemo(
+    () =>
+      normalizeBridgePath(
+        `${pathname}${searchString ? `?${searchString}` : ""}`,
+      ),
+    [pathname, searchString],
+  );
 
   useEffect(() => {
     if (!isVrikaEmbedMode()) return;
@@ -30,20 +40,20 @@ export function VrikaParentBridge() {
         return;
       }
 
-      const target = toAppRouterPath(data.path);
-      if (target !== pathname) {
-        router.push(target);
+      const target = normalizeBridgePath(toAppRouterPath(data.path));
+      if (target !== currentBridgePath) {
+        router.push(toAppRouterPath(data.path));
       }
     };
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [pathname, router]);
+  }, [currentBridgePath, router]);
 
   useEffect(() => {
     if (!isVrikaEmbedMode()) return;
-    postPathnameToParent(pathname);
-  }, [pathname]);
+    postPathnameToParent(pathname, searchString ? `?${searchString}` : "");
+  }, [pathname, searchString]);
 
   return null;
 }
