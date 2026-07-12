@@ -38,14 +38,7 @@ from .components import (
     create_status_badge,
 )
 from .config import (
-    COLOR_BG_BLUE,
-    COLOR_BG_LIGHT_BLUE,
-    COLOR_BLUE,
-    COLOR_BORDER_GRAY,
     COLOR_GRAY,
-    COLOR_LIGHT_BLUE,
-    COLOR_LIGHTER_BLUE,
-    COLOR_PROWLER_DARK_GREEN,
     FINDINGS_TABLE_CHUNK_SIZE,
     PADDING_LARGE,
     PADDING_SMALL,
@@ -270,7 +263,7 @@ def _adapt_universal_to_legacy(framework, provider_type: str) -> SimpleNamespace
 # PDF Styles Cache
 # =============================================================================
 
-_PDF_STYLES_CACHE: dict[str, ParagraphStyle] | None = None
+_PDF_STYLES_CACHE: dict[str, dict[str, ParagraphStyle]] = {}
 
 
 def create_pdf_styles() -> dict[str, ParagraphStyle]:
@@ -287,11 +280,13 @@ def create_pdf_styles() -> dict[str, ParagraphStyle]:
             - 'normal': Normal text style with left indent
             - 'normal_center': Normal text style without indent
     """
-    global _PDF_STYLES_CACHE
+    from .vrika_branding import get_pdf_theme, is_vrika_branding_enabled
 
-    if _PDF_STYLES_CACHE is not None:
-        return _PDF_STYLES_CACHE
+    cache_key = "vrika" if is_vrika_branding_enabled() else "prowler"
+    if cache_key in _PDF_STYLES_CACHE:
+        return _PDF_STYLES_CACHE[cache_key]
 
+    theme = get_pdf_theme()
     _register_fonts()
     styles = getSampleStyleSheet()
 
@@ -299,7 +294,7 @@ def create_pdf_styles() -> dict[str, ParagraphStyle]:
         "CustomTitle",
         parent=styles["Title"],
         fontSize=24,
-        textColor=COLOR_PROWLER_DARK_GREEN,
+        textColor=theme.title_color,
         spaceAfter=20,
         fontName="PlusJakartaSans",
         alignment=TA_CENTER,
@@ -309,37 +304,37 @@ def create_pdf_styles() -> dict[str, ParagraphStyle]:
         "CustomH1",
         parent=styles["Heading1"],
         fontSize=18,
-        textColor=COLOR_BLUE,
+        textColor=theme.h1_color,
         spaceBefore=20,
         spaceAfter=12,
         fontName="PlusJakartaSans",
         leftIndent=0,
         borderWidth=2,
-        borderColor=COLOR_BLUE,
+        borderColor=theme.h1_border_color,
         borderPadding=PADDING_LARGE,
-        backColor=COLOR_BG_BLUE,
+        backColor=theme.h1_bg_color,
     )
 
     h2 = ParagraphStyle(
         "CustomH2",
         parent=styles["Heading2"],
         fontSize=14,
-        textColor=COLOR_LIGHT_BLUE,
+        textColor=theme.h2_color,
         spaceBefore=15,
         spaceAfter=8,
         fontName="PlusJakartaSans",
         leftIndent=10,
         borderWidth=1,
-        borderColor=COLOR_BORDER_GRAY,
+        borderColor=theme.h2_border_color,
         borderPadding=5,
-        backColor=COLOR_BG_LIGHT_BLUE,
+        backColor=theme.h2_bg_color,
     )
 
     h3 = ParagraphStyle(
         "CustomH3",
         parent=styles["Heading3"],
         fontSize=12,
-        textColor=COLOR_LIGHTER_BLUE,
+        textColor=theme.h3_color,
         spaceBefore=10,
         spaceAfter=6,
         fontName="PlusJakartaSans",
@@ -365,7 +360,7 @@ def create_pdf_styles() -> dict[str, ParagraphStyle]:
         fontName="PlusJakartaSans",
     )
 
-    _PDF_STYLES_CACHE = {
+    styled = {
         "title": title_style,
         "h1": h1,
         "h2": h2,
@@ -373,8 +368,9 @@ def create_pdf_styles() -> dict[str, ParagraphStyle]:
         "normal": normal,
         "normal_center": normal_center,
     }
+    _PDF_STYLES_CACHE[cache_key] = styled
 
-    return _PDF_STYLES_CACHE
+    return styled
 
 
 # =============================================================================
@@ -617,30 +613,38 @@ class BaseComplianceReportGenerator(ABC):
         Returns:
             List of ReportLab elements
         """
+        from .vrika_branding import (
+            get_branded_display_name,
+            get_pdf_theme,
+            get_primary_logo_path,
+        )
+
         elements = []
 
-        # Prowler logo
-        logo_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/img/prowler_logo.png"
-        )
+        logo_path = get_primary_logo_path()
         if os.path.exists(logo_path):
-            logo = Image(logo_path, width=5 * inch, height=1 * inch)
+            if "vrika_logo" in logo_path:
+                logo = Image(logo_path, width=2.2 * inch, height=1.1 * inch)
+            else:
+                logo = Image(logo_path, width=5 * inch, height=1 * inch)
             elements.append(logo)
 
         elements.append(Spacer(1, 0.5 * inch))
 
-        # Title
-        title_text = f"{self.config.display_name} Report"
+        branded_name = get_branded_display_name(self.config.display_name)
+        title_text = f"{branded_name} Report"
         elements.append(Paragraph(title_text, self.styles["title"]))
         elements.append(Spacer(1, 0.5 * inch))
 
-        # Compliance info table
         info_rows = self._build_info_rows(data, language=self.config.language)
+        theme = get_pdf_theme()
 
         info_table = create_info_table(
             rows=info_rows,
             label_width=2 * inch,
             value_width=4 * inch,
+            label_color=theme.info_label_color,
+            value_bg_color=theme.info_value_bg_color,
             normal_style=self.styles["normal_center"],
         )
         elements.append(info_table)
@@ -852,7 +856,9 @@ class BaseComplianceReportGenerator(ABC):
         else:
             page_text = f"Page {page_num}"
 
-        return page_text, "Powered by Prowler"
+        from .vrika_branding import get_footer_right_text
+
+        return page_text, get_footer_right_text()
 
     def _render_requirement_detail_extras(
         self, req: RequirementData, data: ComplianceData
@@ -1013,14 +1019,19 @@ class BaseComplianceReportGenerator(ABC):
         if parent_dir and not os.path.isdir(parent_dir):
             raise FileNotFoundError(f"Output directory does not exist: {parent_dir}")
 
+        from .vrika_branding import get_branded_display_name, get_pdf_theme
+
+        theme = get_pdf_theme()
+        branded_name = get_branded_display_name(self.config.display_name)
+
         return SimpleDocTemplate(
             output_path,
             pagesize=letter,
-            title=f"{self.config.display_name} Report - {data.framework}",
-            author="Prowler",
+            title=f"{branded_name} Report - {data.framework}",
+            author=theme.pdf_author,
             subject=f"Compliance Report for {data.framework}",
-            creator="Prowler Engineering Team",
-            keywords=f"compliance,{data.framework},security,framework,prowler",
+            creator=theme.pdf_creator,
+            keywords=f"compliance,{data.framework},security,framework,{theme.pdf_keywords_suffix}",
         )
 
     def _build_pdf(

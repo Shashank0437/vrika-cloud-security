@@ -4,6 +4,8 @@ import {
   CalendarClock,
   Download,
   Eye,
+  FileDown,
+  FileText,
   Pencil,
   ShieldCheck,
   TriangleAlert,
@@ -30,7 +32,11 @@ import {
   ActionDropdownItem,
 } from "@/components/shadcn/dropdown";
 import { toLocalDateString } from "@/lib/date-utils";
-import { downloadScanZip } from "@/lib/helper";
+import {
+  downloadScanExecutivePdf,
+  downloadScanFullPdf,
+  downloadScanZip,
+} from "@/lib/helper";
 import { getScanScheduleCapability } from "@/lib/schedules";
 import { isCloud } from "@/lib/shared/env";
 import {
@@ -212,6 +218,16 @@ export function ScanJobsRowActions({
               icon={<Download />}
               label="Download Scan Reports"
               onSelect={() => downloadScanZip(scan.id, toast)}
+            />
+            <ActionDropdownItem
+              icon={<FileText />}
+              label="Download Executive PDF"
+              onSelect={() => void downloadScanExecutivePdf(scan.id, toast)}
+            />
+            <ActionDropdownItem
+              icon={<FileDown />}
+              label="Download Full PDF Report"
+              onSelect={() => void downloadScanFullPdf(scan.id, toast)}
             />
           </>
         )}

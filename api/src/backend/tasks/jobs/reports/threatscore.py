@@ -14,6 +14,12 @@ from .base import (
 from .charts import create_vertical_bar_chart, get_chart_color_for_percentage
 from .components import get_color_for_compliance, get_color_for_weight
 from .config import COLOR_HIGH_RISK, COLOR_WHITE
+from .vrika_branding import (
+    COLOR_VRIKA_PURPLE_LIGHT,
+    THREATSCORE_SECTION_CHART_COLORS,
+    get_pdf_theme,
+    is_vrika_branding_enabled,
+)
 
 
 class ThreatScoreReportGenerator(BaseComplianceReportGenerator):
@@ -54,18 +60,30 @@ class ThreatScoreReportGenerator(BaseComplianceReportGenerator):
         elements.append(Spacer(1, 0.3 * inch))
 
         # Summary table
+        theme = get_pdf_theme()
         summary_data = [["ThreatScore:", f"{overall_compliance:.2f}%"]]
         compliance_color = get_color_for_compliance(overall_compliance)
+
+        header_bg = (
+            theme.summary_header_color
+            if is_vrika_branding_enabled()
+            else colors.Color(0.1, 0.3, 0.5)
+        )
+        score_bg = (
+            COLOR_VRIKA_PURPLE_LIGHT
+            if is_vrika_branding_enabled()
+            else compliance_color
+        )
 
         summary_table = Table(summary_data, colWidths=[2.5 * inch, 2 * inch])
         summary_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (0, 0), colors.Color(0.1, 0.3, 0.5)),
+                    ("BACKGROUND", (0, 0), (0, 0), header_bg),
                     ("TEXTCOLOR", (0, 0), (0, 0), colors.white),
                     ("FONTNAME", (0, 0), (0, 0), "FiraCode"),
                     ("FONTSIZE", (0, 0), (0, 0), 12),
-                    ("BACKGROUND", (1, 0), (1, 0), compliance_color),
+                    ("BACKGROUND", (1, 0), (1, 0), score_bg),
                     ("TEXTCOLOR", (1, 0), (1, 0), colors.white),
                     ("FONTNAME", (1, 0), (1, 0), "FiraCode"),
                     ("FONTSIZE", (1, 0), (1, 0), 16),
@@ -281,12 +299,20 @@ class ThreatScoreReportGenerator(BaseComplianceReportGenerator):
             labels.append(section)
             values.append(pct)
 
+        chart_colors = None
+        if is_vrika_branding_enabled():
+            chart_colors = [
+                THREATSCORE_SECTION_CHART_COLORS.get(label, "#684CB6")
+                for label in labels
+            ]
+
         return create_vertical_bar_chart(
             labels=labels,
             values=values,
             ylabel="Compliance Score (%)",
             xlabel="",
             color_func=get_chart_color_for_percentage,
+            colors=chart_colors,
             rotation=0,
         )
 

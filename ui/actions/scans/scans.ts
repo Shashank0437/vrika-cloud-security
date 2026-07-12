@@ -465,3 +465,16 @@ export const getCompliancePdfReport = async (
     `${reportName} PDF report`,
   );
 };
+
+export const getVrikaScanPdfReport = async (
+  scanId: string,
+  variant: "executive" | "full",
+): Promise<ScanBinaryResult> => {
+  const label = variant === "executive" ? "executive" : "full";
+  return _fetchScanBinary(
+    scanId,
+    `vrika-report/${variant}`,
+    `scan-${scanId}-vrika-${label}.pdf`,
+    `Vrika ${label} scan`,
+  );
+};

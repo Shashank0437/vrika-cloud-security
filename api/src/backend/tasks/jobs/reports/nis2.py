@@ -74,19 +74,21 @@ class NIS2ReportGenerator(BaseComplianceReportGenerator):
         """
         elements = []
 
-        # Create logos side by side
-        prowler_logo_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/img/prowler_logo.png"
-        )
+        from .vrika_branding import get_primary_logo_path, is_vrika_branding_enabled
+
+        primary_logo_path = get_primary_logo_path()
         nis2_logo_path = os.path.join(
             os.path.dirname(__file__), "../../assets/img/nis2_logo.png"
         )
 
-        prowler_logo = Image(prowler_logo_path, width=3.5 * inch, height=0.7 * inch)
+        if is_vrika_branding_enabled() and "vrika_logo" in primary_logo_path:
+            primary_logo = Image(primary_logo_path, width=2.2 * inch, height=1.1 * inch)
+        else:
+            primary_logo = Image(primary_logo_path, width=3.5 * inch, height=0.7 * inch)
         nis2_logo = Image(nis2_logo_path, width=2.3 * inch, height=1.5 * inch)
 
         logos_table = Table(
-            [[prowler_logo, nis2_logo]], colWidths=[4 * inch, 2.5 * inch]
+            [[primary_logo, nis2_logo]], colWidths=[4 * inch, 2.5 * inch]
         )
         logos_table.setStyle(
             TableStyle(

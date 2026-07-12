@@ -1284,6 +1284,56 @@ def generate_compliance_reports(
             _evict_after_framework("cis")
             gc.collect()
 
+    # Vrika-branded executive scan PDF (full PDF is generated on demand).
+    from tasks.jobs.reports.vrika_branding import is_vrika_branding_enabled
+    from tasks.jobs.reports.vrika_scan import generate_vrika_executive_report
+
+    if is_vrika_branding_enabled():
+        try:
+            vrika_dir = _generate_compliance_output_directory(
+                DJANGO_TMP_OUTPUT_DIRECTORY,
+                provider_uid,
+                tenant_id,
+                scan_id,
+                compliance_framework="vrika",
+            )
+            if out_dir is None:
+                out_dir = str(Path(vrika_dir).parent.parent)
+            executive_pdf = f"{vrika_dir}_executive_report.pdf"
+            generate_vrika_executive_report(
+                tenant_id=tenant_id,
+                scan_id=scan_id,
+                provider_id=provider_id,
+                output_path=executive_pdf,
+            )
+            upload_uri_vrika = _upload_to_s3(
+                tenant_id,
+                scan_id,
+                executive_pdf,
+                f"vrika/{Path(executive_pdf).name}",
+            )
+            if upload_uri_vrika:
+                results["vrika_executive"] = {
+                    "upload": True,
+                    "path": upload_uri_vrika,
+                }
+                logger.info(
+                    "Vrika executive scan report uploaded to %s", upload_uri_vrika
+                )
+            else:
+                results["vrika_executive"] = {"upload": False, "path": out_dir}
+        except Exception as error:
+            logger.exception(
+                "vrika_executive_report_failed scan_id=%s tenant_id=%s",
+                scan_id,
+                tenant_id,
+            )
+            results["vrika_executive"] = {
+                "upload": False,
+                "path": "",
+                "error": str(error),
+            }
+
     # Clean up temporary files only if all generated reports were
     # uploaded successfully. Reports skipped for provider incompatibility
     # or missing CIS variants must not block cleanup.
@@ -1341,3 +1391,46 @@ def generate_compliance_reports_job(
         generate_csa=generate_csa,
         generate_cis=generate_cis,
     )
+
+
+def generate_vrika_full_pdf_job(
+    tenant_id: str,
+    scan_id: str,
+    provider_id: str,
+) -> dict[str, bool | str]:
+    """Generate and upload the on-demand Vrika full scan PDF."""
+    from django.core.cache import cache
+    from tasks.jobs.reports.vrika_scan import generate_vrika_full_report
+
+    lock_key = f"vrika-full-pdf:{scan_id}"
+    try:
+        with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
+            provider_obj = Provider.objects.get(id=provider_id)
+            provider_uid = provider_obj.uid
+
+        vrika_dir = _generate_compliance_output_directory(
+            DJANGO_TMP_OUTPUT_DIRECTORY,
+            provider_uid,
+            tenant_id,
+            scan_id,
+            compliance_framework="vrika",
+        )
+        full_pdf = f"{vrika_dir}_full_report.pdf"
+        generate_vrika_full_report(
+            tenant_id=tenant_id,
+            scan_id=scan_id,
+            provider_id=provider_id,
+            output_path=full_pdf,
+        )
+        upload_uri = _upload_to_s3(
+            tenant_id,
+            scan_id,
+            full_pdf,
+            f"vrika/{Path(full_pdf).name}",
+        )
+        return {
+            "upload": bool(upload_uri),
+            "path": upload_uri or full_pdf,
+        }
+    finally:
+        cache.delete(lock_key)

@@ -2716,6 +2716,93 @@ class ScanViewSet(BaseRLSViewSet):
         content, filename = loader
         return self._serve_file(content, filename, "application/pdf")
 
+    def _serve_vrika_scan_pdf(self, scan, variant: str):
+        """Load and serve a Vrika scan PDF (`executive` or `full`)."""
+        if not scan.output_location:
+            return Response(
+                {"detail": "The scan has no reports yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        pattern_suffix = (
+            "*_executive_report.pdf" if variant == "executive" else "*_full_report.pdf"
+        )
+
+        if scan.output_location.startswith("s3://"):
+            bucket = env.str("DJANGO_OUTPUT_S3_AWS_OUTPUT_BUCKET", "")
+            key_prefix = scan.output_location.removeprefix(f"s3://{bucket}/")
+            prefix = os.path.join(
+                os.path.dirname(key_prefix),
+                "vrika",
+                pattern_suffix,
+            )
+            loader = self._load_file(
+                prefix,
+                s3=True,
+                bucket=bucket,
+                list_objects=True,
+                content_type="application/pdf",
+            )
+        else:
+            base = os.path.dirname(scan.output_location)
+            pattern = os.path.join(base, "vrika", pattern_suffix)
+            loader = self._load_file(pattern, s3=False)
+
+        if isinstance(loader, Response):
+            if variant == "full" and loader.status_code == status.HTTP_404_NOT_FOUND:
+                from django.core.cache import cache
+                from tasks.tasks import generate_vrika_full_pdf_task
+
+                lock_key = f"vrika-full-pdf:{scan.id}"
+                if not cache.get(lock_key):
+                    cache.set(lock_key, True, timeout=3600)
+                    generate_vrika_full_pdf_task.apply_async(
+                        kwargs={
+                            "tenant_id": str(scan.tenant_id),
+                            "scan_id": str(scan.id),
+                            "provider_id": str(scan.provider_id),
+                        }
+                    )
+                return Response(
+                    {
+                        "detail": "The full scan report is being generated. Please retry shortly."
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
+            return loader
+
+        if isinstance(loader, HttpResponseBase):
+            return loader
+
+        content, filename = loader
+        return self._serve_file(content, filename, "application/pdf")
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="vrika-report/executive",
+        url_name="vrika-report-executive",
+    )
+    def vrika_report_executive(self, request, pk=None):
+        scan = self.get_object()
+        running_resp = self._get_task_status(scan)
+        if running_resp:
+            return running_resp
+        return self._serve_vrika_scan_pdf(scan, "executive")
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="vrika-report/full",
+        url_name="vrika-report-full",
+    )
+    def vrika_report_full(self, request, pk=None):
+        scan = self.get_object()
+        running_resp = self._get_task_status(scan)
+        if running_resp:
+            return running_resp
+        return self._serve_vrika_scan_pdf(scan, "full")
+
     def create(self, request, *args, **kwargs):
         input_serializer = self.get_serializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)

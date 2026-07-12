@@ -39,8 +39,14 @@ services:
       retries: 6
       start_period: 90s
 
+  worker:
+    environment:
+      VRIKA_PDF_BRANDING: "true"
+
   api:
     ports: !reset []
+    environment:
+      VRIKA_PDF_BRANDING: "true"
     # Z800 cold start: migrations + Gunicorn + compliance cache warm-up can exceed 3 min.
     healthcheck:
       start_period: 180s

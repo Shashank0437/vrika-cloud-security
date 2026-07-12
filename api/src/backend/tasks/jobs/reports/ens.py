@@ -66,19 +66,25 @@ class ENSReportGenerator(BaseComplianceReportGenerator):
         """
         elements = []
 
-        # Create logos side by side
-        prowler_logo_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/img/prowler_logo.png"
+        from .vrika_branding import (
+            get_pdf_theme,
+            get_primary_logo_path,
+            is_vrika_branding_enabled,
         )
+
+        primary_logo_path = get_primary_logo_path()
         ens_logo_path = os.path.join(
             os.path.dirname(__file__), "../../assets/img/ens_logo.png"
         )
 
-        prowler_logo = Image(prowler_logo_path, width=3.5 * inch, height=0.7 * inch)
+        if is_vrika_branding_enabled() and "vrika_logo" in primary_logo_path:
+            primary_logo = Image(primary_logo_path, width=2.2 * inch, height=1.1 * inch)
+        else:
+            primary_logo = Image(primary_logo_path, width=3.5 * inch, height=0.7 * inch)
         ens_logo = Image(ens_logo_path, width=1.5 * inch, height=2 * inch)
 
         logos_table = Table(
-            [[prowler_logo, ens_logo]], colWidths=[4 * inch, 2.5 * inch]
+            [[primary_logo, ens_logo]], colWidths=[4 * inch, 2.5 * inch]
         )
         logos_table.setStyle(
             TableStyle(
@@ -109,14 +115,15 @@ class ENSReportGenerator(BaseComplianceReportGenerator):
             else:
                 info_data.append([label, value])
 
+        theme = get_pdf_theme()
         info_table = Table(info_data, colWidths=[2 * inch, 4 * inch])
         info_table.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (0, -1), COLOR_BLUE),
+                    ("BACKGROUND", (0, 0), (0, -1), theme.info_label_color),
                     ("TEXTCOLOR", (0, 0), (0, -1), COLOR_WHITE),
                     ("FONTNAME", (0, 0), (0, -1), "FiraCode"),
-                    ("BACKGROUND", (1, 0), (1, -1), COLOR_BG_BLUE),
+                    ("BACKGROUND", (1, 0), (1, -1), theme.info_value_bg_color),
                     ("TEXTCOLOR", (1, 0), (1, -1), COLOR_GRAY),
                     ("FONTNAME", (1, 0), (1, -1), "PlusJakartaSans"),
                     ("ALIGN", (0, 0), (-1, -1), "LEFT"),
@@ -391,7 +398,9 @@ class ENSReportGenerator(BaseComplianceReportGenerator):
         Returns:
             Tuple of (left_text, right_text) for the footer.
         """
-        return f"Página {page_num}", "Powered by Prowler"
+        from .vrika_branding import get_footer_right_text
+
+        return f"Página {page_num}", get_footer_right_text()
 
     def _count_manual_requirements(self, data: ComplianceData) -> int:
         """Count requirements with manual execution mode."""

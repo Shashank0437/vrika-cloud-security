@@ -2,6 +2,7 @@ import {
   getComplianceCsv,
   getComplianceOcsf,
   getCompliancePdfReport,
+  getVrikaScanPdfReport,
   type ScanBinaryResult,
 } from "@/actions/scans";
 import { getTask } from "@/actions/task";
@@ -188,6 +189,70 @@ export const downloadScanZip = async (
   toast({
     title: "Download Started",
     description: "Your browser is downloading the scan report.",
+  });
+};
+
+export const downloadScanExecutivePdf = async (
+  scanId: string,
+  toast: ReturnType<typeof useToast>["toast"],
+): Promise<void> => {
+  toast({
+    title: "Download Started",
+    description: "Preparing the Vrika executive PDF report.",
+  });
+  const result = await getVrikaScanPdfReport(scanId, "executive");
+  await downloadFile(
+    result,
+    "application/pdf",
+    "The Vrika executive PDF report has been downloaded successfully.",
+    toast,
+  );
+};
+
+export const downloadScanFullPdf = async (
+  scanId: string,
+  toast: ReturnType<typeof useToast>["toast"],
+): Promise<void> => {
+  toast({
+    title: "Download Started",
+    description:
+      "Preparing the full Vrika PDF report. Large scans may take a few minutes.",
+  });
+
+  const maxAttempts = 40;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await getVrikaScanPdfReport(scanId, "full");
+
+    if ("success" in result && result.success) {
+      await downloadFile(
+        result,
+        "application/pdf",
+        "The Vrika full PDF report has been downloaded successfully.",
+        toast,
+      );
+      return;
+    }
+
+    if ("pending" in result && result.pending) {
+      await wait(3000);
+      continue;
+    }
+
+    if ("error" in result) {
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: result.error,
+      });
+      return;
+    }
+  }
+
+  toast({
+    variant: "destructive",
+    title: "Download Timed Out",
+    description:
+      "The full report is still being generated. Please try again in a few minutes.",
   });
 };
 

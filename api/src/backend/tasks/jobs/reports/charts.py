@@ -55,6 +55,26 @@ def get_chart_color_for_percentage(percentage: float) -> str:
     Returns:
         Hex color string for matplotlib
     """
+    from .vrika_branding import (
+        VRIKA_CHART_COLOR_CRITICAL,
+        VRIKA_CHART_COLOR_HIGH,
+        VRIKA_CHART_COLOR_LOW,
+        VRIKA_CHART_COLOR_MED,
+        VRIKA_CHART_COLOR_MED_HIGH,
+        is_vrika_branding_enabled,
+    )
+
+    if is_vrika_branding_enabled():
+        if percentage >= 80:
+            return VRIKA_CHART_COLOR_HIGH
+        if percentage >= 60:
+            return VRIKA_CHART_COLOR_MED_HIGH
+        if percentage >= 40:
+            return VRIKA_CHART_COLOR_MED
+        if percentage >= 20:
+            return VRIKA_CHART_COLOR_LOW
+        return VRIKA_CHART_COLOR_CRITICAL
+
     if percentage >= 80:
         return CHART_COLOR_GREEN_1
     if percentage >= 60:
