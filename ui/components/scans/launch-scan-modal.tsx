@@ -4,10 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CloudCog, Loader2, Rocket } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
+import { getComplianceFrameworks } from "@/actions/compliances";
 import { scanOnDemand } from "@/actions/scans";
 import { getSchedule } from "@/actions/schedules";
 import { AccountsSelector } from "@/app/(prowler)/_overview/_components/accounts-selector";
@@ -18,6 +19,15 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from "@/components/shadcn/radio-group/radio-group";
+import {
+  MultiSelect,
+  MultiSelectContent,
+  MultiSelectItem,
+  MultiSelectSelectAll,
+  MultiSelectSeparator,
+  MultiSelectTrigger,
+  MultiSelectValue,
+} from "@/components/shadcn/select/multiselect";
 import { toast, ToastAction } from "@/components/shadcn/toast";
 import { CloudFeatureBadgeLink } from "@/components/shared/cloud-feature-badge";
 import { UsageLimitMessage } from "@/components/shared/usage-limit-message";
@@ -30,7 +40,12 @@ import {
   scheduleFormSchema,
 } from "@/lib/schedules";
 import { isCloud } from "@/lib/shared/env";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import { SCAN_JOBS_TAB } from "@/types";
+import type {
+  ComplianceFrameworkCatalogItem,
+  ComplianceFrameworksResponse,
+} from "@/types/compliance";
 import type { ProviderProps } from "@/types/providers";
 import {
   SCAN_SCHEDULE_CAPABILITY,
@@ -47,10 +62,32 @@ import {
 } from "./schedule/save-schedule";
 import { ScanScheduleFields } from "./schedule/scan-schedule-fields";
 
-const launchScanSchema = z.object({
-  providerId: z.string().min(1, "Select a provider to launch a scan."),
-  scanAlias: scanAliasSchema.optional(),
-});
+const COMPLIANCE_SCOPE = {
+  ALL: "all",
+  SPECIFIC: "specific",
+} as const;
+
+type ComplianceScope = (typeof COMPLIANCE_SCOPE)[keyof typeof COMPLIANCE_SCOPE];
+
+const launchScanSchema = z
+  .object({
+    providerId: z.string().min(1, "Select a provider to launch a scan."),
+    scanAlias: scanAliasSchema.optional(),
+    complianceScope: z.enum([COMPLIANCE_SCOPE.ALL, COMPLIANCE_SCOPE.SPECIFIC]),
+    complianceIds: z.array(z.string()),
+  })
+  .superRefine((values, ctx) => {
+    if (
+      values.complianceScope === COMPLIANCE_SCOPE.SPECIFIC &&
+      values.complianceIds.length === 0
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select at least one compliance framework.",
+        path: ["complianceIds"],
+      });
+    }
+  });
 
 type LaunchScanFormValues = z.infer<typeof launchScanSchema>;
 
@@ -71,6 +108,16 @@ const SCHEDULE_LOAD_STATE = {
 type ScheduleLoadState =
   (typeof SCHEDULE_LOAD_STATE)[keyof typeof SCHEDULE_LOAD_STATE];
 
+const FRAMEWORK_LOAD_STATE = {
+  IDLE: "idle",
+  LOADING: "loading",
+  LOADED: "loaded",
+  ERROR: "error",
+} as const;
+
+type FrameworkLoadState =
+  (typeof FRAMEWORK_LOAD_STATE)[keyof typeof FRAMEWORK_LOAD_STATE];
+
 interface LaunchScanModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,6 +134,12 @@ interface LaunchScanFormProps {
   isScanLimitReached: boolean;
 }
 
+function frameworkDisplayLabel(item: ComplianceFrameworkCatalogItem): string {
+  const { name, framework, version } = item.attributes;
+  const base = name || framework || item.id;
+  return version ? `${base} (${version})` : base;
+}
+
 function LaunchScanForm({
   providers,
   onClose,
@@ -97,7 +150,12 @@ function LaunchScanForm({
   const searchParams = useSearchParams();
   const form = useForm<LaunchScanFormValues>({
     resolver: zodResolver(launchScanSchema),
-    defaultValues: { providerId: "", scanAlias: "" },
+    defaultValues: {
+      providerId: "",
+      scanAlias: "",
+      complianceScope: COMPLIANCE_SCOPE.ALL,
+      complianceIds: [],
+    },
   });
   const scheduleForm = useForm<ScheduleFormValues>({
     resolver: zodResolver(scheduleFormSchema),
@@ -107,8 +165,15 @@ function LaunchScanForm({
   const [scheduleLoad, setScheduleLoad] = useState<ScheduleLoadState>(
     SCHEDULE_LOAD_STATE.IDLE,
   );
+  const [frameworks, setFrameworks] = useState<
+    ComplianceFrameworkCatalogItem[]
+  >([]);
+  const [frameworkLoad, setFrameworkLoad] = useState<FrameworkLoadState>(
+    FRAMEWORK_LOAD_STATE.IDLE,
+  );
   // Guards against out-of-order responses when switching providers quickly.
   const requestedProviderRef = useRef<string>("");
+  const requestedFrameworkProviderTypeRef = useRef<string>("");
 
   const isAdvanced = capability === SCAN_SCHEDULE_CAPABILITY.ADVANCED;
   const isManualOnly = capability === SCAN_SCHEDULE_CAPABILITY.MANUAL_ONLY;
@@ -119,19 +184,65 @@ function LaunchScanForm({
 
   // useWatch, not form.watch: form.watch re-renders are dropped by React Compiler memoization.
   const providerId = useWatch({ control: form.control, name: "providerId" });
+  const complianceScope = useWatch({
+    control: form.control,
+    name: "complianceScope",
+  });
+  const complianceIds = useWatch({
+    control: form.control,
+    name: "complianceIds",
+  });
   const activeTab = getScanJobsTab(searchParams.get("tab") ?? undefined);
   const shouldShowActiveTabAction = activeTab !== SCAN_JOBS_TAB.ACTIVE;
   const disconnectedProviderIds = providers
     .filter((provider) => provider.attributes.connection.connected !== true)
     .map((provider) => provider.id);
 
-  const getProviderScheduleAttributes = (id: string) => {
-    const selectedProvider = providers.find((provider) => provider.id === id);
+  const selectedProvider = providers.find(
+    (provider) => provider.id === providerId,
+  );
+  const selectedProviderType = selectedProvider?.attributes.provider;
 
-    return selectedProvider
-      ? buildScheduleAttributesFromProvider(selectedProvider.attributes)
+  const getProviderScheduleAttributes = (id: string) => {
+    const provider = providers.find((item) => item.id === id);
+
+    return provider
+      ? buildScheduleAttributesFromProvider(provider.attributes)
       : undefined;
   };
+
+  const loadFrameworks = async (providerType: string) => {
+    requestedFrameworkProviderTypeRef.current = providerType;
+    setFrameworkLoad(FRAMEWORK_LOAD_STATE.LOADING);
+    const response = (await getComplianceFrameworks(providerType)) as
+      | ComplianceFrameworksResponse
+      | { error?: string }
+      | undefined;
+
+    if (requestedFrameworkProviderTypeRef.current !== providerType) return;
+
+    if (
+      !response ||
+      ("error" in response && response.error) ||
+      !("data" in response)
+    ) {
+      setFrameworks([]);
+      setFrameworkLoad(FRAMEWORK_LOAD_STATE.ERROR);
+      return;
+    }
+
+    setFrameworks(response.data ?? []);
+    setFrameworkLoad(FRAMEWORK_LOAD_STATE.LOADED);
+  };
+
+  useEffect(() => {
+    if (!selectedProviderType) {
+      setFrameworks([]);
+      setFrameworkLoad(FRAMEWORK_LOAD_STATE.IDLE);
+      return;
+    }
+    void loadFrameworks(selectedProviderType);
+  }, [selectedProviderType]);
 
   const loadSchedule = async (id: string) => {
     requestedProviderRef.current = id;
@@ -154,7 +265,14 @@ function LaunchScanForm({
 
     if (requestedProviderRef.current !== id) return;
 
+    // No advanced schedule API (OSS 405) or empty body → use form defaults.
+    // Still an error for unexpected failures so the user knows saving may overwrite.
     if (!response || ("error" in response && response.error)) {
+      if (isVrikaEmbedMode()) {
+        scheduleForm.reset(getScheduleFormDefaults());
+        setScheduleLoad(SCHEDULE_LOAD_STATE.LOADED);
+        return;
+      }
       setScheduleLoad(SCHEDULE_LOAD_STATE.ERROR);
       return;
     }
@@ -169,6 +287,7 @@ function LaunchScanForm({
 
   const handleProviderChange = (id: string) => {
     form.setValue("providerId", id, { shouldValidate: true });
+    form.setValue("complianceIds", []);
     if (isScheduleMode) void loadSchedule(id);
   };
 
@@ -178,53 +297,82 @@ function LaunchScanForm({
     if (nextMode === LAUNCH_MODE.SCHEDULE) void loadSchedule(providerId);
   };
 
-  const launchNow = form.handleSubmit(async ({ providerId, scanAlias }) => {
-    if (isBlocked) return;
-
-    const formData = new FormData();
-    formData.set("providerId", providerId);
-    const trimmedAlias = scanAlias?.trim();
-    if (trimmedAlias) {
-      formData.set("scanName", trimmedAlias);
-    }
-
-    const result = await scanOnDemand(formData);
-
-    if (hasActionError(result)) {
-      form.setError("root", { message: getActionErrorMessage(result) });
-      return;
-    }
-
-    if (result?.errors && result.errors.length > 0) {
-      form.setError("root", {
-        message: String(result.errors[0]?.detail ?? "Failed to launch scan."),
-      });
-      return;
-    }
-
-    toast({
-      title: "Scan launched",
-      description: "The scan was launched successfully.",
-      action: shouldShowActiveTabAction ? (
-        <ToastAction altText="View scan in progress" asChild>
-          <Link href="/scans?tab=active">View scan</Link>
-        </ToastAction>
-      ) : undefined,
+  const handleComplianceScopeChange = (nextScope: string) => {
+    form.setValue("complianceScope", nextScope as ComplianceScope, {
+      shouldValidate: true,
     });
-    onClose();
-    router.refresh();
-  });
+    if (nextScope === COMPLIANCE_SCOPE.ALL) {
+      form.setValue("complianceIds", [], { shouldValidate: true });
+    }
+  };
+
+  const selectedCompliances =
+    complianceScope === COMPLIANCE_SCOPE.SPECIFIC ? complianceIds : [];
+
+  const launchNow = form.handleSubmit(
+    async ({
+      providerId: id,
+      scanAlias,
+      complianceScope: scope,
+      complianceIds: ids,
+    }) => {
+      if (isBlocked) return;
+
+      const formData = new FormData();
+      formData.set("providerId", id);
+      const trimmedAlias = scanAlias?.trim();
+      if (trimmedAlias) {
+        formData.set("scanName", trimmedAlias);
+      }
+      if (scope === COMPLIANCE_SCOPE.SPECIFIC && ids.length > 0) {
+        formData.set("compliances", JSON.stringify(ids));
+      }
+
+      const result = await scanOnDemand(formData);
+
+      if (hasActionError(result)) {
+        form.setError("root", { message: getActionErrorMessage(result) });
+        return;
+      }
+
+      if (result?.errors && result.errors.length > 0) {
+        form.setError("root", {
+          message: String(result.errors[0]?.detail ?? "Failed to launch scan."),
+        });
+        return;
+      }
+
+      toast({
+        title: "Scan launched",
+        description: "The scan was launched successfully.",
+        action: shouldShowActiveTabAction ? (
+          <ToastAction altText="View scan in progress" asChild>
+            <Link href="/scans?tab=active">View scan</Link>
+          </ToastAction>
+        ) : undefined,
+      });
+      onClose();
+      router.refresh();
+    },
+  );
 
   const saveSchedule = async () => {
     if (isBlocked || !isAdvanced) return;
 
-    const providerValid = await form.trigger("providerId");
+    const providerValid = await form.trigger([
+      "providerId",
+      "complianceScope",
+      "complianceIds",
+    ]);
     if (!providerValid) return;
 
     await scheduleForm.handleSubmit(async (values) => {
       const result = await saveScheduleWithInitialScan({
         providerId: form.getValues("providerId"),
         values,
+        // Local/Vrika API only implements POST /schedules/daily (not PATCH).
+        useLegacyDaily: isVrikaEmbedMode() || !isCloud(),
+        compliances: selectedCompliances,
       });
 
       if (result.status === SAVE_SCHEDULE_STATUS.ERROR) {
@@ -270,10 +418,13 @@ function LaunchScanForm({
 
   const providerError = form.formState.errors.providerId?.message;
   const aliasError = form.formState.errors.scanAlias?.message;
+  const complianceError = form.formState.errors.complianceIds?.message;
   const rootError = form.formState.errors.root?.message;
   const isSubmitting =
     form.formState.isSubmitting || scheduleForm.formState.isSubmitting;
   const isScheduleLoading = scheduleLoad === SCHEDULE_LOAD_STATE.LOADING;
+  const isFrameworkLoading = frameworkLoad === FRAMEWORK_LOAD_STATE.LOADING;
+  const isSpecificCompliance = complianceScope === COMPLIANCE_SCOPE.SPECIFIC;
 
   return (
     // min-w-0: let this dialog grid item shrink so a long provider UID truncates instead of widening the modal
@@ -326,6 +477,78 @@ function LaunchScanForm({
               {!isAdvanced && <CloudFeatureBadgeLink size="sm" />}
             </label>
           </RadioGroup>
+        </Field>
+      )}
+
+      <Field>
+        <FieldLabel>Compliance</FieldLabel>
+        <RadioGroup
+          value={complianceScope}
+          onValueChange={handleComplianceScopeChange}
+          className="flex flex-row flex-wrap gap-6"
+          aria-label="Compliance scope"
+        >
+          <label className="flex items-center gap-2 text-sm">
+            <RadioGroupItem
+              value={COMPLIANCE_SCOPE.ALL}
+              aria-label="All compliance"
+            />
+            All compliance
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <RadioGroupItem
+              value={COMPLIANCE_SCOPE.SPECIFIC}
+              aria-label="Specific compliance"
+              disabled={!providerId}
+            />
+            Specific compliance
+          </label>
+        </RadioGroup>
+      </Field>
+
+      {isSpecificCompliance && (
+        <Field>
+          <FieldLabel>Frameworks</FieldLabel>
+          {isFrameworkLoading ? (
+            <div className="flex items-center gap-3 py-2">
+              <Loader2 className="size-5 animate-spin" />
+              <span className="text-sm">Loading frameworks...</span>
+            </div>
+          ) : frameworkLoad === FRAMEWORK_LOAD_STATE.ERROR ? (
+            <FieldError>
+              Failed to load compliance frameworks for this provider.
+            </FieldError>
+          ) : (
+            <Controller
+              control={form.control}
+              name="complianceIds"
+              render={({ field }) => (
+                <MultiSelect
+                  values={field.value}
+                  onValuesChange={(values) => {
+                    field.onChange(values);
+                    form.clearErrors("complianceIds");
+                  }}
+                >
+                  <MultiSelectTrigger size="default" aria-label="Frameworks">
+                    <MultiSelectValue placeholder="Select compliance frameworks" />
+                  </MultiSelectTrigger>
+                  <MultiSelectContent
+                    search={{ placeholder: "Search frameworks..." }}
+                  >
+                    <MultiSelectSelectAll>Select All</MultiSelectSelectAll>
+                    <MultiSelectSeparator />
+                    {frameworks.map((item) => (
+                      <MultiSelectItem key={item.id} value={item.id}>
+                        {frameworkDisplayLabel(item)}
+                      </MultiSelectItem>
+                    ))}
+                  </MultiSelectContent>
+                </MultiSelect>
+              )}
+            />
+          )}
+          {complianceError && <FieldError>{complianceError}</FieldError>}
         </Field>
       )}
 
@@ -384,7 +607,8 @@ function LaunchScanForm({
           !providers.length ||
           isScheduleLoading ||
           isBlocked ||
-          (isScheduleMode && !providerId)
+          (isScheduleMode && !providerId) ||
+          (isSpecificCompliance && isFrameworkLoading)
         }
         rightIcon={<Rocket className="size-4" />}
       />

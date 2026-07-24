@@ -43,6 +43,13 @@ export const getSchedule = async (providerId: string) => {
   try {
     const response = await fetch(url.toString(), { headers });
 
+    // OSS / Vrika local API only exposes POST /schedules/daily — GET is 405.
+    // Treat as "no existing advanced schedule" so the UI can show defaults
+    // instead of "Failed to load the current scan schedule".
+    if (response.status === 404 || response.status === 405) {
+      return { data: null };
+    }
+
     return handleApiResponse(response);
   } catch (error) {
     return handleApiError(error);
@@ -65,6 +72,11 @@ export const getSchedules = async () => {
       url.searchParams.set("page[size]", "100");
 
       const response = await fetch(url.toString(), { headers });
+
+      // Legacy OSS schedule API has no list endpoint (405 Method Not Allowed).
+      if (response.status === 404 || response.status === 405) {
+        return { data: [] };
+      }
 
       const result = await handleApiResponse(response);
       if (result?.error) return result;
@@ -109,6 +121,13 @@ export const getSchedulesPage = async ({
 
   try {
     const response = await fetch(url.toString(), { headers });
+
+    if (response.status === 404 || response.status === 405) {
+      return {
+        data: [],
+        meta: { pagination: { page: 1, pages: 1, count: 0 } },
+      };
+    }
 
     return handleApiResponse(response);
   } catch (error) {
