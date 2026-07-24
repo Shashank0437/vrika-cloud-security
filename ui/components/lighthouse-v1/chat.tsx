@@ -351,7 +351,12 @@ export const Chat = ({
     <div className="relative flex h-full min-w-0 flex-col overflow-hidden">
       {/* Header with New Chat button */}
       {messages.length > 0 && (
-        <div className="border-border-neutral-secondary border-b px-2 py-3 sm:px-4">
+        <div
+          className={cn(
+            "border-border-neutral-secondary border-b py-3",
+            embedMode ? "px-4 sm:px-6" : "px-2 sm:px-4",
+          )}
+        >
           <div className="flex items-center justify-end">
             <Button
               aria-label="Start new chat"
@@ -444,7 +449,12 @@ export const Chat = ({
       )}
 
       {messages.length === 0 && !errorMessage && !error ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-2 py-4 sm:px-4">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 items-center justify-center py-4",
+            embedMode ? "px-4 sm:px-8" : "px-2 sm:px-4",
+          )}
+        >
           <div
             className={cn(
               "w-full",
@@ -474,7 +484,12 @@ export const Chat = ({
         </div>
       ) : (
         <Conversation className="flex-1">
-          <ConversationContent className="gap-4 px-2 py-4 sm:p-4">
+          <ConversationContent
+            className={cn(
+              "gap-4 py-4",
+              embedMode ? "px-4 sm:px-8 md:px-10" : "px-2 sm:p-4",
+            )}
+          >
             {messages.map((message, idx) => (
               <MessageItem
                 key={`${message.id}-${idx}-${message.role}`}
@@ -512,7 +527,7 @@ export const Chat = ({
         className={cn(
           "mx-auto min-w-0 shrink-0",
           embedMode
-            ? "w-[min(100%,60%)] px-1 pt-3 pb-5"
+            ? "w-[min(100%,60%)] px-2 pt-3 pb-5 sm:px-3"
             : "w-full px-4 pb-16 md:max-w-3xl md:pb-16",
         )}
       >

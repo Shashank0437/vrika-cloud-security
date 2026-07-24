@@ -25,7 +25,13 @@ export function ContentLayout({
   return (
     <>
       <Navbar title={title} icon={icon} onboardingAction={onboardingAction} />
-      <div className={cn("py-4 pr-6", embedMode && "pt-4 pr-4 pb-4 pl-6")}>
+      <div
+        className={cn(
+          "py-4 pr-6",
+          // Extra horizontal inset when embedded in the Vrika shell iframe.
+          embedMode && "px-6 pt-4 pb-4 sm:px-8",
+        )}
+      >
         {children}
       </div>
     </>

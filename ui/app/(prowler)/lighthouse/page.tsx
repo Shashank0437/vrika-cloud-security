@@ -144,7 +144,15 @@ export default async function AIChatbot({
 
   return (
     <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-      <div className="-mx-6 -my-4 h-[calc(100dvh-4.5rem)] sm:-mx-8">
+      {/* In Vrika iframe embed, keep horizontal padding so chat is not flush
+          to the parent shell edges. Standalone Lighthouse still bleeds edge-to-edge. */}
+      <div
+        className={
+          embedMode
+            ? "mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6"
+            : "-mx-6 -my-4 h-[calc(100dvh-4.5rem)] sm:-mx-8"
+        }
+      >
         <Chat
           hasConfig={hasConfig}
           providers={providersConfig.providers}
