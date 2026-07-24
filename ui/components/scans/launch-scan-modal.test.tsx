@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  getComplianceFrameworksMock,
   getScheduleMock,
   refreshMock,
   scanOnDemandMock,
@@ -12,6 +13,7 @@ const {
   toastMock,
   updateScheduleMock,
 } = vi.hoisted(() => ({
+  getComplianceFrameworksMock: vi.fn(),
   getScheduleMock: vi.fn(),
   refreshMock: vi.fn(),
   scanOnDemandMock: vi.fn(),
@@ -43,6 +45,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/actions/scans", () => ({
   scanOnDemand: scanOnDemandMock,
   scheduleDaily: scheduleDailyMock,
+}));
+
+vi.mock("@/actions/compliances", () => ({
+  getComplianceFrameworks: getComplianceFrameworksMock,
 }));
 
 vi.mock("@/actions/schedules", () => ({
@@ -125,6 +131,52 @@ vi.mock("@/app/(prowler)/_overview/_components/accounts-selector", () => ({
   ),
 }));
 
+vi.mock("@/components/shadcn/select/multiselect", () => ({
+  MultiSelect: ({
+    children,
+    values = [],
+    onValuesChange,
+  }: {
+    children: React.ReactNode;
+    values?: string[];
+    onValuesChange?: (values: string[]) => void;
+  }) => (
+    <div data-testid="framework-multiselect">
+      <select
+        aria-label="Frameworks"
+        multiple
+        value={values}
+        onChange={(event) => {
+          const selected = Array.from(event.target.selectedOptions).map(
+            (option) => option.value,
+          );
+          onValuesChange?.(selected);
+        }}
+      >
+        {children}
+      </select>
+    </div>
+  ),
+  MultiSelectTrigger: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  MultiSelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
+  ),
+  MultiSelectContent: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  MultiSelectSelectAll: () => null,
+  MultiSelectSeparator: () => null,
+  MultiSelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => <option value={value}>{children}</option>,
+}));
+
 import {
   ACTION_ERROR_API_MESSAGES,
   ACTION_ERROR_MESSAGES,
@@ -193,6 +245,28 @@ describe("LaunchScanModal", () => {
     vi.clearAllMocks();
     searchParamsValue.current = "";
     scanOnDemandMock.mockResolvedValue({ data: { id: "scan-1" } });
+    getComplianceFrameworksMock.mockResolvedValue({
+      data: [
+        {
+          type: "compliance-frameworks",
+          id: "cis_5.0_aws",
+          attributes: {
+            name: "CIS Amazon Web Services Foundations Benchmark",
+            framework: "CIS",
+            version: "5.0",
+          },
+        },
+        {
+          type: "compliance-frameworks",
+          id: "soc2_aws",
+          attributes: {
+            name: "SOC2",
+            framework: "SOC2",
+            version: "",
+          },
+        },
+      ],
+    });
   });
 
   afterEach(() => {
@@ -571,7 +645,12 @@ describe("LaunchScanModal", () => {
         />,
       );
 
-      expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("radio", { name: "On a schedule" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("radio", { name: "All compliance" }),
+      ).toBeVisible();
 
       await user.selectOptions(screen.getByLabelText("Providers"), provider.id);
       await user.click(screen.getByRole("button", { name: /launch scan/i }));
@@ -592,7 +671,9 @@ describe("LaunchScanModal", () => {
         />,
       );
 
-      expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("radio", { name: "On a schedule" }),
+      ).not.toBeInTheDocument();
       expect(screen.getByText(/exceeded the usage limit/i)).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: /launch scan/i }),
@@ -611,7 +692,9 @@ describe("LaunchScanModal", () => {
         />,
       );
 
-      expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("radio", { name: "On a schedule" }),
+      ).not.toBeInTheDocument();
       expect(screen.getByText(/exceeded the usage limit/i)).toBeInTheDocument();
 
       await user.selectOptions(screen.getByLabelText("Providers"), provider.id);
@@ -623,6 +706,72 @@ describe("LaunchScanModal", () => {
       expect(scanOnDemandMock).not.toHaveBeenCalled();
       expect(getScheduleMock).not.toHaveBeenCalled();
       expect(updateScheduleMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("compliance scope", () => {
+    it("defaults to All compliance and omits compliances from the payload", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <LaunchScanModal open onOpenChange={vi.fn()} providers={[provider]} />,
+      );
+
+      expect(
+        screen.getByRole("radio", { name: "All compliance" }),
+      ).toBeChecked();
+      await user.selectOptions(screen.getByLabelText("Providers"), provider.id);
+      await user.click(screen.getByRole("button", { name: /launch scan/i }));
+
+      await waitFor(() => expect(scanOnDemandMock).toHaveBeenCalled());
+      const formData = scanOnDemandMock.mock.calls[0][0] as FormData;
+      expect(formData.get("compliances")).toBeNull();
+    });
+
+    it("requires at least one framework when Specific compliance is selected", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <LaunchScanModal open onOpenChange={vi.fn()} providers={[provider]} />,
+      );
+
+      await user.selectOptions(screen.getByLabelText("Providers"), provider.id);
+      await waitFor(() =>
+        expect(getComplianceFrameworksMock).toHaveBeenCalledWith("aws"),
+      );
+      await user.click(
+        screen.getByRole("radio", { name: "Specific compliance" }),
+      );
+      await user.click(screen.getByRole("button", { name: /launch scan/i }));
+
+      expect(
+        await screen.findByText(/select at least one compliance framework/i),
+      ).toBeInTheDocument();
+      expect(scanOnDemandMock).not.toHaveBeenCalled();
+    });
+
+    it("passes selected frameworks as compliances JSON when Specific is chosen", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <LaunchScanModal open onOpenChange={vi.fn()} providers={[provider]} />,
+      );
+
+      await user.selectOptions(screen.getByLabelText("Providers"), provider.id);
+      await waitFor(() =>
+        expect(getComplianceFrameworksMock).toHaveBeenCalledWith("aws"),
+      );
+      await user.click(
+        screen.getByRole("radio", { name: "Specific compliance" }),
+      );
+
+      const frameworksSelect = await screen.findByLabelText("Frameworks");
+      await user.selectOptions(frameworksSelect, "cis_5.0_aws");
+      await user.click(screen.getByRole("button", { name: /launch scan/i }));
+
+      await waitFor(() => expect(scanOnDemandMock).toHaveBeenCalled());
+      const formData = scanOnDemandMock.mock.calls[0][0] as FormData;
+      expect(formData.get("compliances")).toBe(JSON.stringify(["cis_5.0_aws"]));
     });
   });
 });

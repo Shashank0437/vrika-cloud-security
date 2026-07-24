@@ -491,3 +491,18 @@ export interface CategoryData {
   totalRequirements: number;
   failedRequirements: number;
 }
+
+/** Catalog entry from GET /compliance-frameworks (no scan required). */
+export interface ComplianceFrameworkCatalogItem {
+  type: "compliance-frameworks";
+  id: string;
+  attributes: {
+    name: string;
+    framework: string;
+    version: string;
+  };
+}
+
+export interface ComplianceFrameworksResponse {
+  data: ComplianceFrameworkCatalogItem[];
+}

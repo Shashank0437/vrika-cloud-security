@@ -140,3 +140,21 @@ export const getComplianceRequirements = async ({
     return undefined;
   }
 };
+
+/**
+ * List compliance frameworks available for a provider type (no prior scan needed).
+ * Powers the Launch A Scan "Specific compliance" picker.
+ */
+export const getComplianceFrameworks = async (providerType: string) => {
+  const headers = await getAuthHeaders({ contentType: false });
+  const url = new URL(`${apiBaseUrl}/compliance-frameworks`);
+  url.searchParams.set("filter[provider_type]", providerType);
+
+  try {
+    const response = await fetch(url.toString(), { headers });
+    return handleApiResponse(response);
+  } catch (error) {
+    console.error("Error fetching compliance frameworks:", error);
+    return undefined;
+  }
+};

@@ -1,6 +1,7 @@
 from allauth.socialaccount.providers.saml.views import ACSView, MetadataView, SLSView
 from api.v1.views import (
     AttackPathsScanViewSet,
+    ComplianceFrameworkViewSet,
     ComplianceOverviewViewSet,
     CustomSAMLLoginView,
     CustomTokenObtainView,
@@ -83,6 +84,11 @@ router.register(r"finding-groups", FindingGroupViewSet, basename="finding-group"
 router.register(r"roles", RoleViewSet, basename="role")
 router.register(
     r"compliance-overviews", ComplianceOverviewViewSet, basename="complianceoverview"
+)
+router.register(
+    r"compliance-frameworks",
+    ComplianceFrameworkViewSet,
+    basename="complianceframework",
 )
 router.register(r"overviews", OverviewViewSet, basename="overview")
 router.register(r"schedules", ScheduleViewSet, basename="schedule")

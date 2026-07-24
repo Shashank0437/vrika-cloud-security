@@ -3,6 +3,7 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import yaml
+from api.compliance import get_compliance_frameworks
 from api.db_router import MainRouter
 from api.exceptions import ConflictException
 from api.models import (
@@ -1046,6 +1047,67 @@ class ScanTriggerEnumSerializerField(serializers.ChoiceField):
         super().__init__(**kwargs)
 
 
+def _validate_scanner_args_compliances(
+    scanner_args: dict | None, provider: Provider | None
+) -> dict:
+    """Validate and normalize optional ``scanner_args.compliances`` for a scan.
+
+    Only ``compliances`` is accepted. Empty/omitted args mean a full-scope scan.
+    When present, each framework ID must belong to the provider type.
+    """
+    if not scanner_args:
+        return {}
+    if not isinstance(scanner_args, dict):
+        raise ValidationError({"scanner_args": "Must be an object."})
+
+    allowed_keys = {"compliances"}
+    unknown_keys = set(scanner_args.keys()) - allowed_keys
+    if unknown_keys:
+        raise ValidationError(
+            {"scanner_args": f"Invalid fields: {sorted(unknown_keys)}"}
+        )
+
+    compliances = scanner_args.get("compliances")
+    if compliances is None:
+        return {}
+    if not isinstance(compliances, list) or not compliances:
+        raise ValidationError(
+            {
+                "scanner_args": {
+                    "compliances": "Must be a non-empty list of framework IDs."
+                }
+            }
+        )
+    if not all(isinstance(item, str) and item.strip() for item in compliances):
+        raise ValidationError(
+            {
+                "scanner_args": {
+                    "compliances": "Each compliance framework ID must be a non-empty string."
+                }
+            }
+        )
+
+    # Deduplicate while preserving order.
+    normalized = list(dict.fromkeys(item.strip() for item in compliances))
+
+    if provider is not None:
+        available = set(get_compliance_frameworks(provider.provider))
+        invalid = [item for item in normalized if item not in available]
+        if invalid:
+            raise ValidationError(
+                {
+                    "scanner_args": {
+                        "compliances": (
+                            "Unknown compliance framework(s) for provider "
+                            f"'{provider.provider}': {invalid}"
+                        )
+                    }
+                }
+            )
+
+    return {"compliances": normalized}
+
+
 class ScanSerializer(RLSSerializer):
     trigger = serializers.ChoiceField(
         choices=Scan.TriggerChoices.choices, read_only=True
@@ -1061,7 +1123,7 @@ class ScanSerializer(RLSSerializer):
             "state",
             "unique_resource_count",
             "progress",
-            # "scanner_args",
+            "scanner_args",
             "duration",
             "provider",
             "task",
@@ -1094,7 +1156,7 @@ class ScanIncludeSerializer(RLSSerializer):
             "state",
             "unique_resource_count",
             "progress",
-            # "scanner_args",
+            "scanner_args",
             "duration",
             "inserted_at",
             "started_at",
@@ -1109,29 +1171,32 @@ class ScanIncludeSerializer(RLSSerializer):
 
 
 class ScanCreateSerializer(RLSSerializer, BaseWriteSerializer):
+    scanner_args = serializers.JSONField(required=False)
+
     class Meta:
         model = Scan
         # TODO: add mutelist when implemented
         fields = [
             "id",
             "provider",
-            # "scanner_args",
+            "scanner_args",
             "name",
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        provider = attrs.get("provider")
+        attrs["scanner_args"] = _validate_scanner_args_compliances(
+            attrs.get("scanner_args"), provider
+        )
+        return attrs
+
     def create(self, validated_data):
-        # provider = validated_data.get("provider")
-
-        # scanner_args will be disabled for the user in the first release
-        # if not validated_data.get("scanner_args"):
-        #     validated_data["scanner_args"] = provider.scanner_args
-        # else:
-        #     validated_data["scanner_args"] = merge_dicts(
-        #         provider.scanner_args, validated_data["scanner_args"]
-        #     )
-
         if not validated_data.get("trigger"):
             validated_data["trigger"] = Scan.TriggerChoices.MANUAL.value
+
+        if "scanner_args" not in validated_data:
+            validated_data["scanner_args"] = {}
 
         return RLSSerializer.create(self, validated_data)
 
@@ -1166,7 +1231,7 @@ class ScanTaskSerializer(RLSSerializer):
             "state",
             "unique_resource_count",
             "progress",
-            # "scanner_args",
+            "scanner_args",
             "duration",
             "started_at",
             "completed_at",
@@ -2699,6 +2764,7 @@ class OverviewRegionSerializer(serializers.Serializer):
 
 class ScheduleDailyCreateSerializer(BaseSerializerV1):
     provider_id = serializers.UUIDField(required=True)
+    scanner_args = serializers.JSONField(required=False)
 
     class JSONAPIMeta:
         resource_name = "daily-schedules"
@@ -2710,7 +2776,78 @@ class ScheduleDailyCreateSerializer(BaseSerializerV1):
             unknown_keys = initial_data - set(self.fields.keys())
             if unknown_keys:
                 raise ValidationError(f"Invalid fields: {unknown_keys}")
+
+        provider_id = data.get("provider_id")
+        provider = None
+        if provider_id is not None:
+            try:
+                provider = Provider.objects.get(pk=provider_id)
+            except Provider.DoesNotExist:
+                raise ValidationError({"provider_id": "Provider does not exist."})
+
+        data["scanner_args"] = _validate_scanner_args_compliances(
+            data.get("scanner_args"), provider
+        )
         return data
+
+
+class ScheduleUpdateSerializer(BaseSerializerV1):
+    """PATCH /schedules/{provider_id} body attributes."""
+
+    scan_enabled = serializers.BooleanField(required=True)
+    scan_frequency = serializers.ChoiceField(
+        choices=["DAILY", "INTERVAL", "WEEKLY", "MONTHLY"], required=True
+    )
+    scan_hour = serializers.IntegerField(required=True, min_value=0, max_value=23)
+    scan_timezone = serializers.CharField(required=True, allow_blank=False)
+    scan_interval_hours = serializers.IntegerField(
+        required=False, allow_null=True, min_value=24
+    )
+    scan_day_of_week = serializers.IntegerField(
+        required=False, allow_null=True, min_value=0, max_value=6
+    )
+    scan_day_of_month = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=28
+    )
+
+    class JSONAPIMeta:
+        resource_name = "schedules"
+
+    def validate(self, data):
+        if hasattr(self, "initial_data"):
+            initial_data = set(self.initial_data.keys()) - {"id", "type"}
+            unknown_keys = initial_data - set(self.fields.keys())
+            if unknown_keys:
+                raise ValidationError(f"Invalid fields: {unknown_keys}")
+
+        from tasks.provider_schedules import validate_schedule_payload
+
+        try:
+            return validate_schedule_payload(data)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+
+class ScheduleBulkUpdateSerializer(BaseSerializerV1):
+    schedule = ScheduleUpdateSerializer()
+    provider_ids = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=False
+    )
+
+    class JSONAPIMeta:
+        resource_name = "schedules-bulk"
+
+
+class ComplianceFrameworkSerializer(BaseSerializerV1):
+    """Catalog entry for a compliance framework available for a provider type."""
+
+    id = serializers.CharField()
+    name = serializers.CharField()
+    framework = serializers.CharField()
+    version = serializers.CharField(allow_blank=True)
+
+    class JSONAPIMeta:
+        resource_name = "compliance-frameworks"
 
 
 # Integrations

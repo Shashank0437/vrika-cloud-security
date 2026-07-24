@@ -370,8 +370,6 @@ function LaunchScanForm({
       const result = await saveScheduleWithInitialScan({
         providerId: form.getValues("providerId"),
         values,
-        // Local/Vrika API only implements POST /schedules/daily (not PATCH).
-        useLegacyDaily: isVrikaEmbedMode() || !isCloud(),
         compliances: selectedCompliances,
       });
 

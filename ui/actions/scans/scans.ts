@@ -107,23 +107,51 @@ export const scanOnDemand = async (formData: FormData) => {
   const headers = await getAuthHeaders({ contentType: true });
   const providerId = formData.get("providerId");
   const scanName = formData.get("scanName") || undefined;
+  const compliancesRaw = formData.get("compliances");
 
   if (!providerId) {
     return { error: "Provider ID is required" };
   }
 
+  let compliances: string[] | undefined;
+  if (typeof compliancesRaw === "string" && compliancesRaw.trim()) {
+    try {
+      const parsed = JSON.parse(compliancesRaw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => typeof item === "string")
+      ) {
+        compliances = parsed;
+      }
+    } catch {
+      compliances = compliancesRaw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
   addScanOperation("create", undefined, {
     provider_id: String(providerId),
     scan_name: scanName ? String(scanName) : undefined,
+    compliances: compliances?.length ? compliances.join(",") : undefined,
   });
 
   const url = new URL(`${apiBaseUrl}/scans`);
 
   try {
+    const attributes: Record<string, unknown> = {};
+    if (scanName) {
+      attributes.name = scanName;
+    }
+    if (compliances?.length) {
+      attributes.scanner_args = { compliances };
+    }
+
     const requestBody = {
       data: {
         type: "scans",
-        attributes: scanName ? { name: scanName } : {},
+        attributes,
         relationships: {
           provider: {
             data: {
@@ -157,15 +185,39 @@ export const scheduleDaily = async (formData: FormData) => {
   const headers = await getAuthHeaders({ contentType: true });
 
   const providerId = formData.get("providerId");
+  const compliancesRaw = formData.get("compliances");
+
+  let compliances: string[] | undefined;
+  if (typeof compliancesRaw === "string" && compliancesRaw.trim()) {
+    try {
+      const parsed = JSON.parse(compliancesRaw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => typeof item === "string")
+      ) {
+        compliances = parsed;
+      }
+    } catch {
+      compliances = compliancesRaw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
 
   const url = new URL(`${apiBaseUrl}/schedules/daily`);
+
+  const attributes: Record<string, unknown> = {
+    provider_id: providerId,
+  };
+  if (compliances?.length) {
+    attributes.scanner_args = { compliances };
+  }
 
   const body = {
     data: {
       type: "daily-schedules",
-      attributes: {
-        provider_id: providerId,
-      },
+      attributes,
     },
   };
 

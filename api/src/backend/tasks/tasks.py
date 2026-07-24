@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -214,6 +215,7 @@ def _get_or_create_queued_scheduled_scan(
     provider_id: str,
     periodic_task_instance: PeriodicTask,
     scheduled_at: datetime,
+    scanner_args: dict | None = None,
 ) -> Scan:
     queued_scan = _get_queued_scheduled_scan(tenant_id, provider_id)
     if queued_scan:
@@ -234,7 +236,23 @@ def _get_or_create_queued_scheduled_scan(
         scheduled_at=scheduled_at,
         scheduler_task_id=periodic_task_instance.id,
         task=queued_task,
+        scanner_args=scanner_args or {},
     )
+
+
+def _scanner_args_from_periodic_task(periodic_task_instance: PeriodicTask) -> dict:
+    """Read optional scanner_args (e.g. compliances) from PeriodicTask kwargs."""
+    try:
+        kwargs = json.loads(periodic_task_instance.kwargs or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    scanner_args = kwargs.get("scanner_args") or {}
+    if not isinstance(scanner_args, dict):
+        return {}
+    compliances = scanner_args.get("compliances")
+    if isinstance(compliances, list) and compliances:
+        return {"compliances": compliances}
+    return {}
 
 
 def _dispatch_next_queued_provider_scan(tenant_id: str, provider_id: str):
@@ -277,11 +295,13 @@ def _get_or_create_next_scheduled_scan(
     provider_id: str,
     periodic_task_instance: PeriodicTask,
     next_scan_datetime: datetime,
+    scanner_args: dict | None = None,
 ) -> Scan:
-    interval = periodic_task_instance.interval
-    now = datetime.now(UTC)
-    while next_scan_datetime <= now:
-        next_scan_datetime += timedelta(**{interval.period: interval.every})
+    from tasks.provider_schedules import advance_schedule_datetime
+
+    next_scan_datetime = advance_schedule_datetime(
+        periodic_task_instance, next_scan_datetime
+    )
 
     return _get_or_create_scheduled_scan(
         tenant_id=tenant_id,
@@ -289,6 +309,7 @@ def _get_or_create_next_scheduled_scan(
         scheduler_task_id=periodic_task_instance.id,
         scheduled_at=next_scan_datetime,
         update_state=True,
+        scanner_args=scanner_args,
     )
 
 
@@ -297,6 +318,7 @@ def _ensure_next_scheduled_scan_best_effort(
     provider_id: str,
     periodic_task_instance: PeriodicTask,
     next_scan_datetime: datetime,
+    scanner_args: dict | None = None,
 ) -> None:
     try:
         with rls_transaction(tenant_id):
@@ -305,6 +327,7 @@ def _ensure_next_scheduled_scan_best_effort(
                 provider_id=provider_id,
                 periodic_task_instance=periodic_task_instance,
                 next_scan_datetime=next_scan_datetime,
+                scanner_args=scanner_args,
             )
     except Exception:
         logger.exception(
@@ -540,7 +563,9 @@ def perform_scan_task(
     acks_late=False,
 )
 @handle_provider_deletion
-def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
+def perform_scheduled_scan_task(
+    self, tenant_id: str, provider_id: str, scanner_args: dict | None = None
+):
     """
     Task to perform a scheduled Prowler scan on a given provider.
 
@@ -553,6 +578,8 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
         self: The task instance (automatically passed when bind=True).
         tenant_id (str): The tenant ID under which the scan is being performed.
         provider_id (str): The primary key of the Provider instance to scan.
+        scanner_args (dict, optional): Optional scoping args (e.g. compliances). When omitted,
+            values stored on the PeriodicTask kwargs are used.
 
     Returns:
         dict: The result of the scan execution, typically including the status and results
@@ -575,6 +602,9 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
         periodic_task_instance = PeriodicTask.objects.get(
             name=f"scan-perform-scheduled-{provider_id}"
         )
+        resolved_scanner_args = scanner_args or _scanner_args_from_periodic_task(
+            periodic_task_instance
+        )
         executed_scan = Scan.objects.filter(
             tenant_id=tenant_id,
             provider_id=provider_id,
@@ -586,11 +616,15 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
             logger.warning(f"Duplicated scheduled scan for provider {provider_id}.")
             return ScanTaskSerializer(instance=executed_scan).data
 
-        interval = periodic_task_instance.interval
         next_scan_datetime = get_next_execution_datetime(task_id, provider_id)
-        current_scan_datetime = next_scan_datetime - timedelta(
-            **{interval.period: interval.every}
-        )
+        if periodic_task_instance.interval:
+            interval = periodic_task_instance.interval
+            current_scan_datetime = next_scan_datetime - timedelta(
+                **{interval.period: interval.every}
+            )
+        else:
+            # Crontab schedules fire at a wall-clock time; this run is "now".
+            current_scan_datetime = datetime.now(UTC)
 
         # TEMPORARY WORKAROUND: Clean up orphan scans from transaction isolation issue
         _cleanup_orphan_scheduled_scans(
@@ -610,12 +644,14 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
                 provider_id=provider_id,
                 periodic_task_instance=periodic_task_instance,
                 scheduled_at=current_scan_datetime,
+                scanner_args=resolved_scanner_args,
             )
             _get_or_create_next_scheduled_scan(
                 tenant_id=tenant_id,
                 provider_id=provider_id,
                 periodic_task_instance=periodic_task_instance,
                 next_scan_datetime=next_scan_datetime,
+                scanner_args=resolved_scanner_args,
             )
             return ScanTaskSerializer(instance=queued_scheduled_scan).data
 
@@ -624,6 +660,7 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
             provider_id=provider_id,
             scheduler_task_id=periodic_task_instance.id,
             scheduled_at=current_scan_datetime,
+            scanner_args=resolved_scanner_args,
         )
         scan_instance.task_id = task_id
         scan_instance.save()
@@ -642,6 +679,7 @@ def perform_scheduled_scan_task(self, tenant_id: str, provider_id: str):
             provider_id=provider_id,
             periodic_task_instance=periodic_task_instance,
             next_scan_datetime=next_scan_datetime,
+            scanner_args=resolved_scanner_args,
         )
         _dispatch_next_queued_provider_scan_best_effort(tenant_id, provider_id)
 
@@ -1420,6 +1458,9 @@ def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: 
     available for the scan's provider, picked dynamically from
     ``Compliance.get_bulk`` (no hard-coded provider → version mapping).
 
+    When the scan is compliance-scoped via ``scanner_args.compliances``, only
+    matching report types are generated.
+
     Args:
         tenant_id (str): The tenant identifier.
         scan_id (str): The scan identifier.
@@ -1428,15 +1469,33 @@ def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: 
     Returns:
         dict: Results for all reports containing upload status and paths.
     """
+    generate_threatscore = True
+    generate_ens = True
+    generate_nis2 = True
+    generate_csa = True
+    generate_cis = True
+
+    with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
+        scan = Scan.objects.filter(pk=scan_id).only("scanner_args").first()
+        selected = (scan.scanner_args or {}).get("compliances") if scan else None
+
+    if isinstance(selected, list) and selected:
+        selected_lower = [c.lower() for c in selected]
+        generate_threatscore = any("threatscore" in c for c in selected_lower)
+        generate_ens = any(c.startswith("ens_") or "/ens" in c for c in selected_lower)
+        generate_nis2 = any("nis2" in c for c in selected_lower)
+        generate_csa = any("csa_ccm" in c or "csa-ccm" in c for c in selected_lower)
+        generate_cis = any(c.startswith("cis_") for c in selected_lower)
+
     return generate_compliance_reports_job(
         tenant_id=tenant_id,
         scan_id=scan_id,
         provider_id=provider_id,
-        generate_threatscore=True,
-        generate_ens=True,
-        generate_nis2=True,
-        generate_csa=True,
-        generate_cis=True,
+        generate_threatscore=generate_threatscore,
+        generate_ens=generate_ens,
+        generate_nis2=generate_nis2,
+        generate_csa=generate_csa,
+        generate_cis=generate_cis,
     )
 
 

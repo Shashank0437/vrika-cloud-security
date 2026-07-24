@@ -152,6 +152,7 @@ from api.v1.serializers import (
     AttackPathsScanSerializer,
     AttackSurfaceOverviewSerializer,
     CategoryOverviewSerializer,
+    ComplianceFrameworkSerializer,
     ComplianceOverviewAttributesSerializer,
     ComplianceOverviewDetailSerializer,
     ComplianceOverviewDetailThreatscoreSerializer,
@@ -220,7 +221,9 @@ from api.v1.serializers import (
     ScanReportSerializer,
     ScanSerializer,
     ScanUpdateSerializer,
+    ScheduleBulkUpdateSerializer,
     ScheduleDailyCreateSerializer,
+    ScheduleUpdateSerializer,
     TaskSerializer,
     TenantApiKeyCreateSerializer,
     TenantApiKeySerializer,
@@ -509,6 +512,11 @@ class SchemaView(SpectacularAPIView):
                 "name": "Compliance Overview",
                 "description": "Endpoints for checking the compliance overview, allowing filtering by scan, provider or"
                 " compliance framework ID.",
+            },
+            {
+                "name": "Compliance",
+                "description": "Endpoints for listing compliance framework catalogs by provider type "
+                "(used when launching compliance-scoped scans).",
             },
             {
                 "name": "Overview",
@@ -1920,10 +1928,9 @@ class ProviderViewSet(DisablePaginationMixin, BaseRLSViewSet):
         summary="Trigger a manual scan",
         description=(
             "Trigger a manual scan by providing the required scan details. "
-            "If `scanner_args` are not provided, the system will automatically use the default settings "
-            "from the associated provider. If you do provide `scanner_args`, these settings will be "
-            "merged with the provider's defaults. This means that your provided settings will override "
-            "the defaults only where they conflict, while the rest of the default settings will remain intact."
+            "Optionally pass `scanner_args.compliances` with one or more compliance "
+            "framework IDs to run only the checks mapped to those frameworks. "
+            "Omit `scanner_args` (or leave `compliances` empty) to run a full scan."
         ),
         request=ScanCreateSerializer,
         responses={202: OpenApiResponse(response=TaskSerializer)},
@@ -4766,6 +4773,82 @@ class RoleProviderGroupRelationshipView(RelationshipView, BaseRLSViewSet):
 
 @extend_schema_view(
     list=extend_schema(
+        tags=["Compliance"],
+        summary="List compliance frameworks for a provider type",
+        description=(
+            "Return the catalog of compliance frameworks available for a given "
+            "provider type. Used when launching a compliance-scoped scan. "
+            "Requires `filter[provider_type]` (e.g. aws, azure, gcp)."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="filter[provider_type]",
+                required=True,
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Provider type (aws, azure, gcp, ...).",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="Compliance frameworks listed successfully",
+                response=ComplianceFrameworkSerializer(many=True),
+            ),
+            400: OpenApiResponse(description="Missing or invalid provider_type filter"),
+        },
+    ),
+)
+class ComplianceFrameworkViewSet(BaseRLSViewSet):
+    """Catalog of compliance frameworks by provider type (no scan required)."""
+
+    serializer_class = ComplianceFrameworkSerializer
+    http_method_names = ["get"]
+    # Readable by any authenticated user that can open the launch-scan UI.
+    required_permissions = []
+
+    def get_queryset(self):
+        return Scan.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        provider_type = request.query_params.get("filter[provider_type]")
+        if not provider_type:
+            raise ValidationError(
+                {
+                    "filter[provider_type]": (
+                        "This query parameter is required to list compliance frameworks."
+                    )
+                }
+            )
+        if provider_type not in Provider.ProviderChoices.values:
+            raise ValidationError(
+                {
+                    "filter[provider_type]": (
+                        f"Invalid provider type '{provider_type}'. "
+                        f"Valid values: {list(Provider.ProviderChoices.values)}"
+                    )
+                }
+            )
+
+        framework_ids = get_compliance_frameworks(provider_type)
+        template = PROWLER_COMPLIANCE_OVERVIEW_TEMPLATE.get(provider_type, {})
+        payload = []
+        for framework_id in sorted(framework_ids):
+            meta = template.get(framework_id, {})
+            payload.append(
+                {
+                    "id": framework_id,
+                    "name": meta.get("name") or framework_id,
+                    "framework": meta.get("framework") or framework_id,
+                    "version": meta.get("version") or "",
+                }
+            )
+
+        serializer = self.get_serializer(payload, many=True)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    list=extend_schema(
         tags=["Compliance Overview"],
         summary="List compliance overviews",
         description=(
@@ -6706,30 +6789,199 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
 
 @extend_schema(tags=["Schedule"])
 @extend_schema_view(
+    list=extend_schema(
+        summary="List scan schedules",
+        description="Return the scan schedule configuration for each visible provider.",
+    ),
+    retrieve=extend_schema(
+        summary="Retrieve a provider scan schedule",
+        description="Fetch the scan schedule for a provider. The schedule id is the provider id.",
+    ),
+    partial_update=extend_schema(
+        summary="Update a provider scan schedule",
+        description="Create or update daily / weekly / monthly / interval scan schedules.",
+        request=ScheduleUpdateSerializer,
+    ),
+    destroy=extend_schema(
+        summary="Remove a provider scan schedule",
+        description="Delete the Celery beat schedule for the given provider.",
+    ),
     daily=extend_schema(
         summary="Create a daily schedule scan for a given provider",
         description="Schedules a daily scan for the specified provider. This endpoint creates a periodic task "
         "that will execute a scan every 24 hours.",
         request=ScheduleDailyCreateSerializer,
         responses={202: OpenApiResponse(response=TaskSerializer)},
-    )
+    ),
+    bulk=extend_schema(
+        summary="Bulk-update provider scan schedules",
+        description="Apply the same schedule configuration to multiple providers.",
+        request=ScheduleBulkUpdateSerializer,
+    ),
 )
 class ScheduleViewSet(BaseRLSViewSet):
-    # TODO: change to Schedule when implemented
-    queryset = Task.objects.none()
-    http_method_names = ["post"]
+    queryset = Provider.objects.all()
+    http_method_names = ["get", "post", "patch", "delete"]
     # RBAC required permissions
     required_permissions = [Permissions.MANAGE_SCANS]
+    ordering = ["id"]
+    # Manual pagination + filter[configured]; skip JSON:API filter validation.
+    filter_backends = []
 
     def get_queryset(self):
-        return super().get_queryset()
+        user_roles = get_role(self.request.user, self.request.tenant_id)
+        if user_roles.unlimited_visibility:
+            return Provider.objects.filter(tenant_id=self.request.tenant_id)
+        return get_providers(user_roles)
 
     def get_serializer_class(self):
         if self.action == "daily":
             if hasattr(self, "response_serializer_class"):
                 return self.response_serializer_class
             return ScheduleDailyCreateSerializer
-        return super().get_serializer_class()
+        if self.action == "partial_update":
+            return ScheduleUpdateSerializer
+        if self.action == "bulk":
+            return ScheduleBulkUpdateSerializer
+        return ScheduleUpdateSerializer
+
+    @staticmethod
+    def _serialize_datetime(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+    def _schedule_resource(self, provider: Provider, attributes: dict | None = None):
+        from tasks.provider_schedules import read_schedule_attributes
+
+        attrs = attributes or read_schedule_attributes(provider)
+        return {
+            "type": "schedules",
+            "id": str(provider.id),
+            "attributes": {
+                "scan_enabled": attrs["scan_enabled"],
+                "scan_frequency": attrs["scan_frequency"],
+                "scan_hour": attrs["scan_hour"],
+                "scan_timezone": attrs["scan_timezone"],
+                "scan_interval_hours": attrs["scan_interval_hours"],
+                "scan_day_of_week": attrs["scan_day_of_week"],
+                "scan_day_of_month": attrs["scan_day_of_month"],
+                "next_scan_at": self._serialize_datetime(attrs.get("next_scan_at")),
+                "last_scan_at": self._serialize_datetime(attrs.get("last_scan_at")),
+            },
+            "relationships": {
+                "provider": {"data": {"type": "providers", "id": str(provider.id)}}
+            },
+        }
+
+    def _include_providers(self, providers: list[Provider]):
+        include = self.request.query_params.get("include", "")
+        if "provider" not in {part.strip() for part in include.split(",") if part}:
+            return None
+        included = []
+        for provider in providers:
+            included.append(
+                {
+                    "type": "providers",
+                    "id": str(provider.id),
+                    "attributes": {
+                        "provider": provider.provider,
+                        "uid": provider.uid,
+                        "alias": provider.alias,
+                        "connection": {
+                            "connected": provider.connected,
+                            "last_checked_at": self._serialize_datetime(
+                                provider.connection_last_checked_at
+                            ),
+                        },
+                        "inserted_at": self._serialize_datetime(provider.inserted_at),
+                        "updated_at": self._serialize_datetime(provider.updated_at),
+                    },
+                }
+            )
+        return included
+
+    def _configured_only(self) -> bool:
+        return self.request.query_params.get("filter[configured]", "").lower() in {
+            "true",
+            "1",
+        }
+
+    def list(self, request, *args, **kwargs):
+        from tasks.provider_schedules import get_scheduled_periodic_task
+
+        providers = list(self.get_queryset().order_by("id"))
+        if self._configured_only():
+            providers = [
+                provider
+                for provider in providers
+                if get_scheduled_periodic_task(str(provider.id)) is not None
+            ]
+
+        try:
+            page_number = max(int(request.query_params.get("page[number]", 1)), 1)
+        except (TypeError, ValueError):
+            page_number = 1
+        try:
+            page_size = min(
+                max(int(request.query_params.get("page[size]", 10)), 1), 100
+            )
+        except (TypeError, ValueError):
+            page_size = 10
+
+        total = len(providers)
+        pages = max((total + page_size - 1) // page_size, 1)
+        start = (page_number - 1) * page_size
+        page_providers = providers[start : start + page_size]
+
+        payload = {
+            "data": [self._schedule_resource(provider) for provider in page_providers],
+            "meta": {
+                "version": "v1",
+                "pagination": {
+                    "page": page_number,
+                    "pages": pages,
+                    "count": total,
+                },
+            },
+        }
+        included = self._include_providers(page_providers)
+        if included is not None:
+            payload["included"] = included
+        return Response(payload)
+
+    def retrieve(self, request, *args, **kwargs):
+        provider = self.get_object()
+        payload = {"data": self._schedule_resource(provider), "meta": {"version": "v1"}}
+        included = self._include_providers([provider])
+        if included is not None:
+            payload["included"] = included
+        return Response(payload)
+
+    def partial_update(self, request, *args, **kwargs):
+        from tasks.provider_schedules import upsert_provider_schedule
+
+        provider = self.get_object()
+        serializer = ScheduleUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        attributes = upsert_provider_schedule(provider, serializer.validated_data)
+        payload = {
+            "data": self._schedule_resource(provider, attributes),
+            "meta": {"version": "v1"},
+        }
+        included = self._include_providers([provider])
+        if included is not None:
+            payload["included"] = included
+        return Response(payload)
+
+    def destroy(self, request, *args, **kwargs):
+        from tasks.provider_schedules import remove_provider_schedule
+
+        provider = self.get_object()
+        remove_provider_schedule(provider)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(exclude=True)
     def create(self, request, *args, **kwargs):
@@ -6740,10 +6992,11 @@ class ScheduleViewSet(BaseRLSViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         provider_id = serializer.validated_data["provider_id"]
+        scanner_args = serializer.validated_data.get("scanner_args") or {}
 
         provider_instance = get_object_or_404(Provider, pk=provider_id)
         with transaction.atomic():
-            task = schedule_provider_scan(provider_instance)
+            task = schedule_provider_scan(provider_instance, scanner_args=scanner_args)
 
         prowler_task = Task.objects.get(id=task.id)
         self.response_serializer_class = TaskSerializer
@@ -6757,6 +7010,41 @@ class ScheduleViewSet(BaseRLSViewSet):
                     "task-detail", kwargs={"pk": prowler_task.id}
                 )
             },
+        )
+
+    @action(detail=False, methods=["post"], url_path="bulk", url_name="bulk")
+    def bulk(self, request):
+        from tasks.provider_schedules import upsert_provider_schedule
+
+        serializer = ScheduleBulkUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        schedule_payload = serializer.validated_data["schedule"]
+        provider_ids = serializer.validated_data["provider_ids"]
+
+        queryset = self.get_queryset().filter(id__in=provider_ids)
+        providers_by_id = {str(provider.id): provider for provider in queryset}
+
+        updated: list[str] = []
+        failed: list[dict] = []
+        for provider_id in provider_ids:
+            provider = providers_by_id.get(str(provider_id))
+            if provider is None:
+                failed.append({"id": str(provider_id), "error": "Provider not found."})
+                continue
+            try:
+                upsert_provider_schedule(provider, schedule_payload)
+                updated.append(str(provider.id))
+            except Exception as exc:  # noqa: BLE001 - surface per-provider failures
+                failed.append({"id": str(provider.id), "error": str(exc)})
+
+        return Response(
+            {
+                "data": {
+                    "type": "schedules-bulk",
+                    "attributes": {"updated": updated, "failed": failed},
+                },
+                "meta": {"version": "v1"},
+            }
         )
 
 

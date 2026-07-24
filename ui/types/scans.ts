@@ -5,6 +5,8 @@ export interface ScannerArgs {
   only_logs?: boolean;
   excluded_checks?: string[];
   aws_retries_max_attempts?: number;
+  /** When set, Prowler runs only checks mapped to these compliance frameworks. */
+  compliances?: string[];
 }
 
 export const SCAN_TRIGGER = {

@@ -1161,7 +1161,17 @@ def perform_prowler_scan(
         if exc:
             raise exc
 
-        prowler_scan = ProwlerScan(provider=prowler_provider, checks=checks_to_execute)
+        prowler_scan_kwargs: dict = {}
+        scanner_args = scan_instance.scanner_args or {}
+        compliances = scanner_args.get("compliances")
+        if isinstance(compliances, list) and compliances:
+            prowler_scan_kwargs["compliances"] = compliances
+        if checks_to_execute:
+            prowler_scan_kwargs["checks"] = checks_to_execute
+        elif isinstance(scanner_args.get("checks"), list) and scanner_args["checks"]:
+            prowler_scan_kwargs["checks"] = scanner_args["checks"]
+
+        prowler_scan = ProwlerScan(provider=prowler_provider, **prowler_scan_kwargs)
 
         resource_cache = {}
         tag_cache = {}
@@ -1615,6 +1625,13 @@ def create_compliance_requirements(tenant_id: str, scan_id: str):
         compliance_template = PROWLER_COMPLIANCE_OVERVIEW_TEMPLATE[
             provider_instance.provider
         ]
+        selected_compliances = (scan_instance.scanner_args or {}).get("compliances")
+        if isinstance(selected_compliances, list) and selected_compliances:
+            compliance_template = {
+                compliance_id: compliance
+                for compliance_id, compliance in compliance_template.items()
+                if compliance_id in selected_compliances
+            }
         modeled_threatscore_compliance_id = "ProwlerThreatScore-1.0"
 
         requirement_lookup: dict[str, list[tuple[str, str]]] = {}

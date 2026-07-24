@@ -20,6 +20,8 @@ export interface SaveScheduleParams {
   values: ScheduleFormValues;
   /** Save through the legacy `/schedules/daily` endpoint (OSS / non-Cloud). */
   useLegacyDaily?: boolean;
+  /** Optional compliance framework IDs for the initial / recurring daily scan. */
+  compliances?: string[];
 }
 
 export interface SaveScheduleResult {
@@ -32,12 +34,16 @@ export async function saveScheduleWithInitialScan({
   providerId,
   values,
   useLegacyDaily = false,
+  compliances,
 }: SaveScheduleParams): Promise<SaveScheduleResult> {
   let scheduleResult: ActionErrorResult | null;
 
   if (useLegacyDaily) {
     const formData = new FormData();
     formData.set("providerId", providerId);
+    if (compliances?.length) {
+      formData.set("compliances", JSON.stringify(compliances));
+    }
     scheduleResult = await scheduleDaily(formData);
   } else {
     scheduleResult = await updateSchedule(
@@ -59,6 +65,9 @@ export async function saveScheduleWithInitialScan({
 
   const formData = new FormData();
   formData.set("providerId", providerId);
+  if (compliances?.length) {
+    formData.set("compliances", JSON.stringify(compliances));
+  }
   const scanResult = await scanOnDemand(formData);
 
   if (hasActionError(scanResult)) {

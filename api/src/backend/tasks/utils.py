@@ -6,7 +6,7 @@ from api.models import Scan, StateChoices
 from django_celery_beat.models import PeriodicTask
 from django_celery_results.models import TaskResult
 
-SCHEDULED_SCAN_NAME = "Daily scheduled scan"
+SCHEDULED_SCAN_NAME = "Scheduled scan"
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -41,15 +41,22 @@ def get_next_execution_datetime(task_id: int, provider_id: str) -> datetime:
             name=f"scan-perform-scheduled-{provider_id}"
         )
 
-    interval = periodic_task_instance.interval
+    if periodic_task_instance.interval:
+        current_scheduled_time = datetime.combine(
+            datetime.now(UTC).date(),
+            task_instance.date_created.time(),
+            tzinfo=UTC,
+        )
+        interval = periodic_task_instance.interval
+        return current_scheduled_time + timedelta(**{interval.period: interval.every})
 
-    current_scheduled_time = datetime.combine(
-        datetime.now(UTC).date(),
-        task_instance.date_created.time(),
-        tzinfo=UTC,
-    )
+    # Crontab / other beat schedules (daily / weekly / monthly).
+    from tasks.provider_schedules import advance_schedule_datetime, compute_next_scan_at
 
-    return current_scheduled_time + timedelta(**{interval.period: interval.every})
+    next_at = compute_next_scan_at(periodic_task_instance)
+    if next_at is not None:
+        return next_at
+    return advance_schedule_datetime(periodic_task_instance, datetime.now(UTC))
 
 
 def batched(iterable, batch_size):
@@ -82,6 +89,7 @@ def _get_or_create_scheduled_scan(
     scheduler_task_id: int,
     scheduled_at: datetime,
     update_state: bool = False,
+    scanner_args: dict | None = None,
 ) -> Scan:
     """
     Get or create a scheduled scan, cleaning up duplicates if found.
@@ -92,10 +100,12 @@ def _get_or_create_scheduled_scan(
         scheduler_task_id: The PeriodicTask ID.
         scheduled_at: The scheduled datetime for the scan.
         update_state: If True, also reset state to SCHEDULED when updating.
+        scanner_args: Optional scoping args (e.g. compliances) to persist on the scan.
 
     Returns:
         The scan instance to use.
     """
+    scanner_args = scanner_args or {}
     scheduled_scans = list(
         Scan.objects.filter(
             tenant_id=tenant_id,
@@ -116,6 +126,9 @@ def _get_or_create_scheduled_scan(
             scan_instance.state = StateChoices.SCHEDULED
             scan_instance.name = SCHEDULED_SCAN_NAME
             needs_update = True
+        if scanner_args and scan_instance.scanner_args != scanner_args:
+            scan_instance.scanner_args = scanner_args
+            needs_update = True
         if needs_update:
             scan_instance.scheduled_at = scheduled_at
             scan_instance.save()
@@ -129,4 +142,5 @@ def _get_or_create_scheduled_scan(
         state=StateChoices.SCHEDULED,
         scheduled_at=scheduled_at,
         scheduler_task_id=scheduler_task_id,
+        scanner_args=scanner_args,
     )
