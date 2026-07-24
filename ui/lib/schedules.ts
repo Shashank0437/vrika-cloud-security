@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import type { ScanScheduleSummary } from "@/types/scans";
 import {
   SCAN_SCHEDULE_CAPABILITY,
@@ -50,17 +51,14 @@ export const scheduleUpdatePayloadSchema = z.object({
 /**
  * Default scan-schedule capability for the current environment.
  *
- * Pure function (no side effects) so it is trivial to unit-test. Prowler OSS has
- * no billing, so the only distinction it can make is Cloud vs non-Cloud:
- * non-Cloud → legacy daily-only, Cloud → full scheduling. The prowler-cloud
- * overlay computes its own (billing-aware) capability and passes it down via the
- * optional `capability` prop, overriding this default — no billing concept ever
- * leaks into OSS.
+ * Cloud and Vrika embed → full scheduling. Plain OSS (non-Cloud) → legacy
+ * daily-only. The prowler-cloud overlay can still pass a billing-aware
+ * `capability` prop to override this default.
  */
 export function getScanScheduleCapability(
   isCloud: boolean,
 ): ScanScheduleCapability {
-  return isCloud
+  return isCloud || isVrikaEmbedMode()
     ? SCAN_SCHEDULE_CAPABILITY.ADVANCED
     : SCAN_SCHEDULE_CAPABILITY.DAILY_LEGACY;
 }

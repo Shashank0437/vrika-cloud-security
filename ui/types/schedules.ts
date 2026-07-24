@@ -22,13 +22,13 @@ export const SCHEDULE_WEEKDAY_LABELS = [
 ] as const;
 
 /**
- * Scan-schedule capability modes. In Prowler OSS this is resolved purely from
- * the runtime environment (Cloud vs non-Cloud); the prowler-cloud overlay
- * computes a billing-aware capability and injects it via the `capability` prop.
+ * Scan-schedule capability modes. Default resolution is Cloud / Vrika embed →
+ * ADVANCED, plain OSS → DAILY_LEGACY; the prowler-cloud overlay can inject a
+ * billing-aware capability via the `capability` prop.
  *
  * - `ADVANCED`: full scheduling through the new schedules API —
  *   `/schedules/{providerId}` for a single provider, `/schedules/bulk` for the
- *   organization flow (Prowler Cloud, subscribed/paid).
+ *   organization flow (Prowler Cloud, Vrika embed, subscribed/paid).
  * - `DAILY_LEGACY`: Prowler OSS / non-Cloud. Only the legacy `Daily` schedule
  *   (`/schedules/daily`) plus optional on-demand scans are allowed.
  * - `MANUAL_ONLY`: Prowler Cloud trial/onboarding. No schedules at all, only a

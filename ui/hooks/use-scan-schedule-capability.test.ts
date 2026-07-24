@@ -13,6 +13,7 @@ describe("useScanScheduleCapability", () => {
   it("returns DAILY_LEGACY for OSS without loading", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "false");
 
     // When
     const { result } = renderHook(() => useScanScheduleCapability());
@@ -27,6 +28,22 @@ describe("useScanScheduleCapability", () => {
   it("returns ADVANCED for Cloud env without loading", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "false");
+
+    // When
+    const { result } = renderHook(() => useScanScheduleCapability());
+
+    // Then
+    expect(result.current).toEqual({
+      capability: SCAN_SCHEDULE_CAPABILITY.ADVANCED,
+      isScheduleCapabilityLoading: false,
+    });
+  });
+
+  it("returns ADVANCED for Vrika embed without Cloud env", () => {
+    // Given
+    vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "true");
 
     // When
     const { result } = renderHook(() => useScanScheduleCapability());

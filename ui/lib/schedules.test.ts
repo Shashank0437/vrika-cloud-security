@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildProviderScheduleSummary,
@@ -427,14 +427,30 @@ describe("browser timezone", () => {
 });
 
 describe("scan schedule capability", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("returns DAILY_LEGACY for non-Cloud (OSS)", () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "false");
+
     expect(getScanScheduleCapability(false)).toBe(
       SCAN_SCHEDULE_CAPABILITY.DAILY_LEGACY,
     );
   });
 
   it("returns ADVANCED for Cloud", () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "false");
+
     expect(getScanScheduleCapability(true)).toBe(
+      SCAN_SCHEDULE_CAPABILITY.ADVANCED,
+    );
+  });
+
+  it("returns ADVANCED for Vrika embed even when not Cloud", () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_EMBED_MODE", "true");
+
+    expect(getScanScheduleCapability(false)).toBe(
       SCAN_SCHEDULE_CAPABILITY.ADVANCED,
     );
   });
