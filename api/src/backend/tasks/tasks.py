@@ -1452,7 +1452,12 @@ def jira_integration_task(
     queue="scan-reports",
 )
 @handle_provider_deletion
-def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: str):
+def generate_compliance_reports_task(
+    tenant_id: str,
+    scan_id: str,
+    provider_id: str,
+    threatscore_only: bool = False,
+):
     """
     Optimized task to generate ThreatScore, ENS, NIS2, CSA CCM and CIS reports with shared queries.
 
@@ -1472,10 +1477,24 @@ def generate_compliance_reports_task(tenant_id: str, scan_id: str, provider_id: 
         tenant_id (str): The tenant identifier.
         scan_id (str): The scan identifier.
         provider_id (str): The provider identifier.
+        threatscore_only (bool): When True, only regenerate the ThreatScore PDF
+            (used by on-demand download fallback).
 
     Returns:
         dict: Results for all reports containing upload status and paths.
     """
+    if threatscore_only:
+        return generate_compliance_reports_job(
+            tenant_id=tenant_id,
+            scan_id=scan_id,
+            provider_id=provider_id,
+            generate_threatscore=True,
+            generate_ens=False,
+            generate_nis2=False,
+            generate_csa=False,
+            generate_cis=False,
+        )
+
     generate_threatscore = True
     generate_ens = True
     generate_nis2 = True
