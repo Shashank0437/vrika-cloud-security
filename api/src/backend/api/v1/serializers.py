@@ -2809,6 +2809,8 @@ class ScheduleUpdateSerializer(BaseSerializerV1):
     scan_day_of_month = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=28
     )
+    # Optional compliance scope for recurring scheduled scans.
+    scanner_args = serializers.JSONField(required=False, allow_null=True)
 
     class JSONAPIMeta:
         resource_name = "schedules"
@@ -2822,10 +2824,23 @@ class ScheduleUpdateSerializer(BaseSerializerV1):
 
         from tasks.provider_schedules import validate_schedule_payload
 
+        scanner_args_provided = (
+            hasattr(self, "initial_data") and "scanner_args" in self.initial_data
+        )
+        scanner_args = data.pop("scanner_args", None)
+
         try:
-            return validate_schedule_payload(data)
+            result = validate_schedule_payload(data)
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
+
+        if scanner_args_provided:
+            provider = self.context.get("provider")
+            result["scanner_args"] = _validate_scanner_args_compliances(
+                scanner_args, provider
+            )
+            result["_scanner_args_provided"] = True
+        return result
 
 
 class ScheduleBulkUpdateSerializer(BaseSerializerV1):

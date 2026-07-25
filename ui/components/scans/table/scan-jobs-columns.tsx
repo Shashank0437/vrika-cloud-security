@@ -69,14 +69,14 @@ const scheduledScanScheduleColumn: ColumnDef<ScanProps> = {
   header: ({ column }) => (
     <DataTableColumnHeader column={column} title="Schedule" />
   ),
-  // Cadence on top, local fire time underneath.
+  // Cadence + configured time on top, next fire time underneath.
   cell: ({ row }) => {
     const schedule = getScheduleSummary(row.original);
     if (!schedule) return <span>-</span>;
 
     return (
       <StackedCell
-        primary={schedule.cadence ?? schedule.summary}
+        primary={schedule.summary ?? schedule.cadence}
         secondary={formatLocalTimeWithZone(
           row.original.attributes.scheduled_at,
         )}

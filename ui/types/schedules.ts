@@ -54,6 +54,8 @@ export interface ScheduleAttributes {
   scan_interval_hours: number | null;
   scan_day_of_week: number | null;
   scan_day_of_month: number | null;
+  /** Framework IDs for compliance-scoped recurring scans; empty = full scan. */
+  compliances?: string[];
   /** Read-only, server-computed next fire time; null when paused/unconfigured. */
   next_scan_at?: string | null;
   /** Read-only, completed_at of the provider's last completed scan. */
@@ -89,6 +91,8 @@ export interface ScheduleUpdatePayload {
   scan_interval_hours: number | null;
   scan_day_of_week: number | null;
   scan_day_of_month: number | null;
+  /** Persist compliance scope on the recurring schedule (empty = full scan). */
+  scanner_args?: { compliances?: string[] };
 }
 
 /** Per-provider failure, as returned by `/schedules/bulk`: `{ id, error }`. */

@@ -60,6 +60,7 @@ describe("saveScheduleWithInitialScan", () => {
         scan_frequency: SCHEDULE_FREQUENCY.WEEKLY,
         scan_hour: 9,
         scan_day_of_week: 1,
+        scanner_args: {},
       }),
     );
     expect(scheduleDailyMock).not.toHaveBeenCalled();

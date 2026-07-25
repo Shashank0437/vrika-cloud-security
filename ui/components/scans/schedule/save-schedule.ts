@@ -48,7 +48,7 @@ export async function saveScheduleWithInitialScan({
   } else {
     scheduleResult = await updateSchedule(
       providerId,
-      buildScheduleUpdatePayload(values),
+      buildScheduleUpdatePayload(values, { compliances: compliances ?? [] }),
     );
   }
 

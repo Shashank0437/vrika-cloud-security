@@ -365,17 +365,44 @@ export function buildScheduledTabRows(
 ): { data: ScanProps[]; meta?: MetaDataProps } {
   if (!result || result.error) return { data: [] };
 
+  // Guard against non-array payloads (e.g. accidental JSON:API double-wrap).
+  const rawData: unknown = result.data;
+  let schedules: ScheduleProps[] = [];
+  let nestedMeta: MetaDataProps | undefined;
+  let nestedIncluded: { type: string; id: string }[] = [];
+
+  if (Array.isArray(rawData)) {
+    schedules = rawData as ScheduleProps[];
+  } else if (rawData && typeof rawData === "object") {
+    const nested = rawData as {
+      data?: unknown;
+      included?: unknown;
+      meta?: MetaDataProps;
+    };
+    if (Array.isArray(nested.data)) {
+      schedules = nested.data as ScheduleProps[];
+    }
+    if (Array.isArray(nested.included)) {
+      nestedIncluded = nested.included as { type: string; id: string }[];
+    }
+    nestedMeta = nested.meta;
+  }
+
+  const includedResources = Array.isArray(result.included)
+    ? result.included
+    : nestedIncluded;
+
   const providerById = new Map(
-    ((result.included ?? []) as ProviderProps[])
+    (includedResources as ProviderProps[])
       .filter((resource) => resource.type === "providers")
       .map((provider) => [provider.id, provider]),
   );
 
-  const data = (result.data ?? []).map((schedule) =>
+  const data = schedules.map((schedule) =>
     mapScheduleToScanRow(schedule, providerById.get(schedule.id), now),
   );
 
-  return { data, meta: result.meta };
+  return { data, meta: result.meta ?? nestedMeta };
 }
 
 /** Maps a `/schedules` resource (1:1 with a provider) to the Scheduled-tab row shape. */

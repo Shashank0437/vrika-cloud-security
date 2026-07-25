@@ -55,6 +55,7 @@ def _empty_attributes() -> dict[str, Any]:
         "scan_interval_hours": None,
         "scan_day_of_week": None,
         "scan_day_of_month": None,
+        "compliances": [],
         "next_scan_at": None,
         "last_scan_at": None,
     }
@@ -120,6 +121,24 @@ def _infer_legacy_attributes(periodic_task: PeriodicTask) -> dict[str, Any]:
 def compute_next_scan_at(periodic_task: PeriodicTask | None) -> datetime | None:
     if periodic_task is None or not periodic_task.enabled:
         return None
+
+    # Prefer wall-clock math from stored schedule metadata (timezone-correct).
+    kwargs = _parse_periodic_kwargs(periodic_task)
+    stored = kwargs.get(SCHEDULE_KWARGS_KEY)
+    if isinstance(stored, dict) and stored.get("scan_hour") is not None:
+        attrs = {
+            "scan_enabled": bool(periodic_task.enabled),
+            "scan_frequency": stored.get("scan_frequency") or FREQUENCY_DAILY,
+            "scan_hour": stored.get("scan_hour"),
+            "scan_timezone": stored.get("scan_timezone") or "UTC",
+            "scan_interval_hours": stored.get("scan_interval_hours"),
+            "scan_day_of_week": stored.get("scan_day_of_week"),
+            "scan_day_of_month": stored.get("scan_day_of_month"),
+        }
+        from_attrs = next_run_from_schedule_attrs(attrs)
+        if from_attrs is not None:
+            return from_attrs
+
     try:
         schedule = periodic_task.schedule
     except Exception:
@@ -147,6 +166,54 @@ def compute_next_scan_at(periodic_task: PeriodicTask | None) -> datetime | None:
         except Exception:
             return next_at
     return next_at
+
+
+def next_run_from_schedule_attrs(
+    attrs: dict[str, Any], now: datetime | None = None
+) -> datetime | None:
+    """Next fire time from ADVANCED schedule attributes, in UTC."""
+    if not attrs.get("scan_enabled") or attrs.get("scan_hour") is None:
+        return None
+
+    frequency = attrs.get("scan_frequency") or FREQUENCY_DAILY
+    if frequency == FREQUENCY_INTERVAL:
+        # Interval schedules are driven by Celery IntervalSchedule, not wall-clock hour.
+        return None
+
+    try:
+        tz = ZoneInfo(attrs.get("scan_timezone") or "UTC")
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+
+    now_utc = now or datetime.now(UTC)
+    local_now = now_utc.astimezone(tz)
+    hour = int(attrs["scan_hour"])
+    candidate = local_now.replace(hour=hour, minute=0, second=0, microsecond=0)
+
+    if frequency == FREQUENCY_WEEKLY:
+        # Cron: 0=Sunday .. 6=Saturday. datetime.weekday(): 0=Monday .. 6=Sunday.
+        cron_dow = int(attrs.get("scan_day_of_week") or 0)
+        python_dow = (cron_dow + 6) % 7
+        days_ahead = (python_dow - local_now.weekday()) % 7
+        candidate = candidate + timedelta(days=days_ahead)
+        if candidate <= local_now:
+            candidate += timedelta(days=7)
+    elif frequency == FREQUENCY_MONTHLY:
+        day = int(attrs.get("scan_day_of_month") or 1)
+        candidate = candidate.replace(day=day)
+        if candidate <= local_now:
+            month = candidate.month + 1
+            year = candidate.year
+            if month > 12:
+                month = 1
+                year += 1
+            candidate = candidate.replace(year=year, month=month, day=day)
+    else:
+        # DAILY
+        if candidate <= local_now:
+            candidate += timedelta(days=1)
+
+    return candidate.astimezone(UTC)
 
 
 def advance_schedule_datetime(periodic_task: PeriodicTask, when: datetime) -> datetime:
@@ -213,6 +280,14 @@ def read_schedule_attributes(
         attrs["scan_day_of_month"] = stored.get("scan_day_of_month")
     else:
         attrs = _infer_legacy_attributes(periodic_task)
+
+    scanner_args = kwargs.get("scanner_args") or {}
+    compliances = (
+        scanner_args.get("compliances") if isinstance(scanner_args, dict) else None
+    )
+    attrs["compliances"] = (
+        list(compliances) if isinstance(compliances, list) and compliances else []
+    )
 
     attrs["next_scan_at"] = compute_next_scan_at(periodic_task)
     attrs["last_scan_at"] = last_completed_scan_at(tenant_id, provider_id)

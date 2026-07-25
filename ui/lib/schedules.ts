@@ -46,6 +46,11 @@ export const scheduleUpdatePayloadSchema = z.object({
   scan_interval_hours: z.number().int().min(SCAN_INTERVAL_HOURS_MIN).nullable(),
   scan_day_of_week: z.number().int().min(0).max(6).nullable(),
   scan_day_of_month: z.number().int().min(1).max(28).nullable(),
+  scanner_args: z
+    .object({
+      compliances: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -125,8 +130,9 @@ export function getScheduleFormValues(
 
 export function buildScheduleUpdatePayload(
   values: ScheduleFormValues,
+  options?: { compliances?: string[] },
 ): ScheduleUpdatePayload {
-  return {
+  const payload: ScheduleUpdatePayload = {
     scan_enabled: true,
     scan_frequency: values.frequency,
     scan_hour: values.hour,
@@ -142,6 +148,17 @@ export function buildScheduleUpdatePayload(
         ? values.dayOfMonth
         : null,
   };
+
+  // Only when caller opts in (Launch Scan flow). Omit from edit-time/cadence-only saves
+  // so we do not wipe an existing compliance-scoped schedule.
+  if (options) {
+    payload.scanner_args =
+      options.compliances && options.compliances.length > 0
+        ? { compliances: options.compliances }
+        : {};
+  }
+
+  return payload;
 }
 
 interface SchedulesActionResult {

@@ -6853,6 +6853,14 @@ class ScheduleViewSet(BaseRLSViewSet):
             return value.isoformat()
         return value
 
+    def _jsonapi_document(self, payload: dict, status_code: int = status.HTTP_200_OK):
+        """Return a pre-built JSON:API document without DRF double-wrapping ``data``."""
+        return HttpResponse(
+            json.dumps(payload, default=str),
+            status=status_code,
+            content_type="application/vnd.api+json",
+        )
+
     def _schedule_resource(self, provider: Provider, attributes: dict | None = None):
         from tasks.provider_schedules import read_schedule_attributes
 
@@ -6868,6 +6876,7 @@ class ScheduleViewSet(BaseRLSViewSet):
                 "scan_interval_hours": attrs["scan_interval_hours"],
                 "scan_day_of_week": attrs["scan_day_of_week"],
                 "scan_day_of_month": attrs["scan_day_of_month"],
+                "compliances": attrs.get("compliances") or [],
                 "next_scan_at": self._serialize_datetime(attrs.get("next_scan_at")),
                 "last_scan_at": self._serialize_datetime(attrs.get("last_scan_at")),
             },
@@ -6950,7 +6959,7 @@ class ScheduleViewSet(BaseRLSViewSet):
         included = self._include_providers(page_providers)
         if included is not None:
             payload["included"] = included
-        return Response(payload)
+        return self._jsonapi_document(payload)
 
     def retrieve(self, request, *args, **kwargs):
         provider = self.get_object()
@@ -6958,15 +6967,24 @@ class ScheduleViewSet(BaseRLSViewSet):
         included = self._include_providers([provider])
         if included is not None:
             payload["included"] = included
-        return Response(payload)
+        return self._jsonapi_document(payload)
 
     def partial_update(self, request, *args, **kwargs):
         from tasks.provider_schedules import upsert_provider_schedule
 
         provider = self.get_object()
-        serializer = ScheduleUpdateSerializer(data=request.data)
+        serializer = ScheduleUpdateSerializer(
+            data=request.data,
+            context={**self.get_serializer_context(), "provider": provider},
+        )
         serializer.is_valid(raise_exception=True)
-        attributes = upsert_provider_schedule(provider, serializer.validated_data)
+        validated = dict(serializer.validated_data)
+        scanner_args = None
+        if validated.pop("_scanner_args_provided", False):
+            scanner_args = validated.pop("scanner_args", {}) or {}
+        attributes = upsert_provider_schedule(
+            provider, validated, scanner_args=scanner_args
+        )
         payload = {
             "data": self._schedule_resource(provider, attributes),
             "meta": {"version": "v1"},
@@ -6974,7 +6992,7 @@ class ScheduleViewSet(BaseRLSViewSet):
         included = self._include_providers([provider])
         if included is not None:
             payload["included"] = included
-        return Response(payload)
+        return self._jsonapi_document(payload)
 
     def destroy(self, request, *args, **kwargs):
         from tasks.provider_schedules import remove_provider_schedule
@@ -7018,7 +7036,10 @@ class ScheduleViewSet(BaseRLSViewSet):
 
         serializer = ScheduleBulkUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        schedule_payload = serializer.validated_data["schedule"]
+        schedule_payload = dict(serializer.validated_data["schedule"])
+        scanner_args = None
+        if schedule_payload.pop("_scanner_args_provided", False):
+            scanner_args = schedule_payload.pop("scanner_args", {}) or {}
         provider_ids = serializer.validated_data["provider_ids"]
 
         queryset = self.get_queryset().filter(id__in=provider_ids)
@@ -7032,12 +7053,24 @@ class ScheduleViewSet(BaseRLSViewSet):
                 failed.append({"id": str(provider_id), "error": "Provider not found."})
                 continue
             try:
-                upsert_provider_schedule(provider, schedule_payload)
+                # Re-validate compliances against each provider type when scoped.
+                per_provider_scanner_args = scanner_args
+                if scanner_args is not None and scanner_args.get("compliances"):
+                    from api.v1.serializers import _validate_scanner_args_compliances
+
+                    per_provider_scanner_args = _validate_scanner_args_compliances(
+                        scanner_args, provider
+                    )
+                upsert_provider_schedule(
+                    provider,
+                    schedule_payload,
+                    scanner_args=per_provider_scanner_args,
+                )
                 updated.append(str(provider.id))
             except Exception as exc:  # noqa: BLE001 - surface per-provider failures
                 failed.append({"id": str(provider.id), "error": str(exc)})
 
-        return Response(
+        return self._jsonapi_document(
             {
                 "data": {
                     "type": "schedules-bulk",
