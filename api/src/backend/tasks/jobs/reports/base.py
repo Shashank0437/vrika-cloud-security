@@ -694,10 +694,12 @@ class BaseComplianceReportGenerator(ABC):
         }
         lang_labels = labels.get(language, labels["en"])
 
+        from .vrika_branding import brand_report_text
+
         info_rows = [
-            (lang_labels["framework"], data.framework),
-            (lang_labels["id"], data.compliance_id),
-            (lang_labels["name"], data.name),
+            (lang_labels["framework"], brand_report_text(data.framework)),
+            (lang_labels["id"], brand_report_text(data.compliance_id)),
+            (lang_labels["name"], brand_report_text(data.name)),
             (lang_labels["version"], data.version),
         ]
 
@@ -714,7 +716,9 @@ class BaseComplianceReportGenerator(ABC):
         info_rows.append((lang_labels["scan_id"], data.scan_id))
 
         if data.description:
-            info_rows.append((lang_labels["description"], data.description))
+            info_rows.append(
+                (lang_labels["description"], brand_report_text(data.description))
+            )
 
         return info_rows
 

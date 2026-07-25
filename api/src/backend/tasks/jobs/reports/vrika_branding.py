@@ -34,6 +34,17 @@ DISPLAY_NAME_OVERRIDES: dict[str, str] = {
     "Prowler ThreatScore": "Vrika ThreatScore",
 }
 
+# Longer phrases first so nested "Prowler"/"prowler" tokens rewrite cleanly.
+_REPORT_TEXT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (
+        "Prowler ThreatScore Compliance Framework",
+        "Vrika ThreatScore Compliance Framework",
+    ),
+    ("Prowler ThreatScore", "Vrika ThreatScore"),
+    ("ProwlerThreatScore", "VrikaThreatScore"),
+    ("prowler_threatscore", "vrika_threatscore"),
+)
+
 
 @dataclass(frozen=True)
 class PdfTheme:
@@ -70,10 +81,22 @@ def get_primary_logo_path() -> str:
     return os.path.join(_ASSETS_DIR, "prowler_logo.png")
 
 
+def brand_report_text(text: str | None) -> str:
+    """Rewrite Prowler ThreatScore strings to Vrika in user-facing PDF fields."""
+    if text is None:
+        return ""
+    if not is_vrika_branding_enabled():
+        return text
+    branded = text
+    for old, new in _REPORT_TEXT_REPLACEMENTS:
+        branded = branded.replace(old, new)
+    return branded
+
+
 def get_branded_display_name(display_name: str) -> str:
     if not is_vrika_branding_enabled():
         return display_name
-    return DISPLAY_NAME_OVERRIDES.get(display_name, display_name)
+    return brand_report_text(DISPLAY_NAME_OVERRIDES.get(display_name, display_name))
 
 
 def get_footer_right_text() -> str:
