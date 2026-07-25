@@ -1,8 +1,13 @@
 """Provider scan schedule helpers backed by django-celery-beat.
 
-Stores cadence metadata in PeriodicTask.kwargs under ``schedule`` so the
+Stores cadence metadata in PeriodicTask.headers under ``schedule`` so the
 ``/api/v1/schedules`` CRUD API can round-trip daily / weekly / monthly /
 interval configurations used by the ADVANCED UI.
+
+Celery PeriodicTask.kwargs are only task call arguments (``tenant_id``,
+``provider_id``, optional ``scanner_args``). Schedule metadata must not live
+in kwargs — Beat passes kwargs into ``scan-perform-scheduled`` and an extra
+``schedule`` key causes TypeError.
 """
 
 from __future__ import annotations
@@ -69,6 +74,25 @@ def _parse_periodic_kwargs(periodic_task: PeriodicTask) -> dict[str, Any]:
     return kwargs if isinstance(kwargs, dict) else {}
 
 
+def _parse_periodic_headers(periodic_task: PeriodicTask) -> dict[str, Any]:
+    try:
+        headers = json.loads(periodic_task.headers or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return headers if isinstance(headers, dict) else {}
+
+
+def _schedule_metadata(periodic_task: PeriodicTask) -> dict[str, Any] | None:
+    """Prefer headers; fall back to legacy kwargs.schedule for older rows."""
+    headers = _parse_periodic_headers(periodic_task)
+    stored = headers.get(SCHEDULE_KWARGS_KEY)
+    if isinstance(stored, dict):
+        return stored
+    kwargs = _parse_periodic_kwargs(periodic_task)
+    stored = kwargs.get(SCHEDULE_KWARGS_KEY)
+    return stored if isinstance(stored, dict) else None
+
+
 def _infer_legacy_attributes(periodic_task: PeriodicTask) -> dict[str, Any]:
     """Map pre-metadata daily interval tasks to ADVANCED schedule attributes."""
     attrs = _empty_attributes()
@@ -123,8 +147,7 @@ def compute_next_scan_at(periodic_task: PeriodicTask | None) -> datetime | None:
         return None
 
     # Prefer wall-clock math from stored schedule metadata (timezone-correct).
-    kwargs = _parse_periodic_kwargs(periodic_task)
-    stored = kwargs.get(SCHEDULE_KWARGS_KEY)
+    stored = _schedule_metadata(periodic_task)
     if isinstance(stored, dict) and stored.get("scan_hour") is not None:
         attrs = {
             "scan_enabled": bool(periodic_task.enabled),
@@ -268,7 +291,7 @@ def read_schedule_attributes(
         return attrs
 
     kwargs = _parse_periodic_kwargs(periodic_task)
-    stored = kwargs.get(SCHEDULE_KWARGS_KEY)
+    stored = _schedule_metadata(periodic_task)
     if isinstance(stored, dict) and stored.get("scan_hour") is not None:
         attrs = _empty_attributes()
         attrs["scan_enabled"] = bool(periodic_task.enabled)
@@ -400,13 +423,12 @@ def _merge_periodic_kwargs(
     *,
     tenant_id: str,
     provider_id: str,
-    schedule_attrs: dict[str, Any],
     scanner_args: dict | None,
 ) -> dict[str, Any]:
+    """Build Celery task kwargs only (never include schedule metadata)."""
     merged = {
         "tenant_id": tenant_id,
         "provider_id": provider_id,
-        SCHEDULE_KWARGS_KEY: schedule_attrs,
     }
     existing_scanner = existing.get("scanner_args")
     if scanner_args is not None:
@@ -416,6 +438,16 @@ def _merge_periodic_kwargs(
         merged["scanner_args"] = {
             "compliances": existing_scanner["compliances"],
         }
+    return merged
+
+
+def _merge_periodic_headers(
+    existing: dict[str, Any],
+    *,
+    schedule_attrs: dict[str, Any],
+) -> dict[str, Any]:
+    merged = {k: v for k, v in existing.items() if k != SCHEDULE_KWARGS_KEY}
+    merged[SCHEDULE_KWARGS_KEY] = schedule_attrs
     return merged
 
 
@@ -433,12 +465,18 @@ def upsert_provider_schedule(
 
     periodic_task = get_scheduled_periodic_task(provider_id)
     existing_kwargs = _parse_periodic_kwargs(periodic_task) if periodic_task else {}
+    existing_headers = _parse_periodic_headers(periodic_task) if periodic_task else {}
+    # Legacy rows stored schedule inside kwargs — drop it from task kwargs.
+    existing_kwargs.pop(SCHEDULE_KWARGS_KEY, None)
     periodic_kwargs = _merge_periodic_kwargs(
         existing_kwargs,
         tenant_id=tenant_id,
         provider_id=provider_id,
-        schedule_attrs=attrs,
         scanner_args=scanner_args,
+    )
+    periodic_headers = _merge_periodic_headers(
+        existing_headers,
+        schedule_attrs=attrs,
     )
 
     if periodic_task is None:
@@ -452,6 +490,7 @@ def upsert_provider_schedule(
     periodic_task.crontab = beat["crontab"]
     periodic_task.enabled = attrs["scan_enabled"]
     periodic_task.kwargs = json.dumps(periodic_kwargs)
+    periodic_task.headers = json.dumps(periodic_headers)
     periodic_task.start_time = datetime.now(UTC)
     periodic_task.save()
 

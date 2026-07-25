@@ -564,7 +564,11 @@ def perform_scan_task(
 )
 @handle_provider_deletion
 def perform_scheduled_scan_task(
-    self, tenant_id: str, provider_id: str, scanner_args: dict | None = None
+    self,
+    tenant_id: str,
+    provider_id: str,
+    scanner_args: dict | None = None,
+    schedule: dict | None = None,  # noqa: ARG001 — legacy PeriodicTask kwargs
 ):
     """
     Task to perform a scheduled Prowler scan on a given provider.
@@ -580,12 +584,15 @@ def perform_scheduled_scan_task(
         provider_id (str): The primary key of the Provider instance to scan.
         scanner_args (dict, optional): Optional scoping args (e.g. compliances). When omitted,
             values stored on the PeriodicTask kwargs are used.
+        schedule (dict, optional): Ignored. Accepted for backward compatibility with older
+            PeriodicTask rows that stored cadence metadata in kwargs (now kept in headers).
 
     Returns:
         dict: The result of the scan execution, typically including the status and results
         of the performed checks.
 
     """
+    _ = schedule  # legacy kwargs compatibility until PeriodicTask rows are migrated
     task_id = self.request.id
 
     with rls_transaction(tenant_id):
