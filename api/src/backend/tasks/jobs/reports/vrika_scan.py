@@ -327,7 +327,12 @@ def _load_appendix_rows(
         .values("check_id")
         .annotate(
             title=Max(Cast("check_metadata__checktitle", output_field=TextField())),
-            description=Max(Cast("check_metadata__checkdescription", output_field=TextField())),
+            remediation=Max(
+                Cast(
+                    "check_metadata__remediation__recommendation__text",
+                    output_field=TextField(),
+                )
+            ),
             severity=Max("severity"),
             resource_count=Count("id"),
         )
@@ -335,12 +340,17 @@ def _load_appendix_rows(
     )
     appendix: list[dict[str, str]] = []
     for row in rows:
+        remediation = str(row["remediation"] or "").strip()
+        remediation = remediation.replace("**", "").replace("\n", " ")
         appendix.append(
             {
                 "title": row["title"] or str(row["check_id"]).replace("_", " ").title(),
                 "severity": str(row["severity"] or "").capitalize(),
                 "resources": str(int(row["resource_count"] or 0)),
-                "description": truncate_text(str(row["description"] or ""), 120),
+                "remediation": truncate_text(
+                    remediation or "Review in Vrika dashboard for remediation steps.",
+                    200,
+                ),
             }
         )
     return appendix
@@ -973,7 +983,7 @@ class VrikaScanReportGenerator:
             ColumnConfig("Risk", 2.2 * inch, "title", align="LEFT"),
             ColumnConfig("Severity", 0.85 * inch, "severity"),
             ColumnConfig("Resources", 0.85 * inch, "resources"),
-            ColumnConfig("Summary", 2.35 * inch, "description", align="LEFT"),
+            ColumnConfig("Remediation", 2.35 * inch, "remediation", align="LEFT"),
         ]
 
         for domain in domains[:APPENDIX_DOMAIN_LIMIT]:
