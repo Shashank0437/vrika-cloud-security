@@ -17,7 +17,8 @@ from api.models import (
     StatusChoices,
 )
 from celery.utils.log import get_task_logger
-from django.db.models import Case, Count, IntegerField, Max, Sum, Value, When
+from django.db.models import Case, Count, IntegerField, Max, Sum, TextField, Value, When
+from django.db.models.functions import Cast
 from prowler.lib.check.compliance_models import Compliance
 from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -266,8 +267,8 @@ def _load_top_risks(
         )
         .values("check_id")
         .annotate(
-            title=Max("check_metadata__checktitle"),
-            description=Max("check_metadata__checkdescription"),
+            title=Max(Cast("check_metadata__checktitle", output_field=TextField())),
+            description=Max(Cast("check_metadata__checkdescription", output_field=TextField())),
             severity=Max("severity"),
             resource_count=Count("id"),
             severity_rank=severity_rank,
@@ -308,8 +309,8 @@ def _load_appendix_rows(
         )
         .values("check_id")
         .annotate(
-            title=Max("check_metadata__checktitle"),
-            description=Max("check_metadata__checkdescription"),
+            title=Max(Cast("check_metadata__checktitle", output_field=TextField())),
+            description=Max(Cast("check_metadata__checkdescription", output_field=TextField())),
             severity=Max("severity"),
             resource_count=Count("id"),
         )
