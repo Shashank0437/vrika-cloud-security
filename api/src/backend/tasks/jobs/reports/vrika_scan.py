@@ -20,7 +20,8 @@ from celery.utils.log import get_task_logger
 from django.db.models import Case, Count, IntegerField, Max, Sum, TextField, Value, When
 from django.db.models.functions import Cast
 from prowler.lib.check.compliance_models import Compliance
-from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+from reportlab.lib.colors import HexColor, white
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -36,11 +37,14 @@ from reportlab.platypus import (
 
 from .base import _register_fonts, create_pdf_styles
 from .charts import create_horizontal_bar_chart, create_pie_chart
-from .components import ColumnConfig, create_data_table, truncate_text
+from .components import (
+    ColumnConfig,
+    escape_html,
+    truncate_text,
+)
 from .config import COLOR_GRAY, FINDINGS_TABLE_CHUNK_SIZE, get_framework_config
 from .vrika_branding import (
     COLOR_VRIKA_PURPLE,
-    COLOR_VRIKA_PURPLE_LIGHT,
     COLOR_VRIKA_PURPLE_PALE,
     get_branded_display_name,
     get_footer_right_text,
@@ -69,8 +73,21 @@ MAX_FRAMEWORKS_TO_SCAN = 30
 APPENDIX_CHECKS_PER_DOMAIN = 25
 APPENDIX_DOMAIN_LIMIT = 15
 
-SEVERITY_CHART_COLORS = ["#C70000", "#FFC600", "#E49B0F", "#B2911C", "#9CA3AF"]
-PIE_COLORS = ["#AD151A", "#87ae73"]
+SEVERITY_CHART_COLORS = ["#B4232A", "#E4572E", "#F5A623", "#F7CE46", "#9CA3AF"]
+PIE_COLORS = ["#D14343", "#3BA776"]
+
+# Section band + table accents (executive report visual system).
+COLOR_VRIKA_ACCENT = HexColor("#F59E0B")
+COLOR_GRID_LIGHT = HexColor("#E7E3F3")
+COLOR_TEXT_DARK = HexColor("#2B2540")
+COLOR_TEXT_MUTED = HexColor("#6B7280")
+SEVERITY_TEXT_COLORS = {
+    "critical": "#B4232A",
+    "high": "#E4572E",
+    "medium": "#C77700",
+    "low": "#8A6D00",
+    "informational": "#6B7280",
+}
 
 
 @dataclass(frozen=True)
@@ -363,6 +380,180 @@ class VrikaScanReportGenerator:
             fontName="PlusJakartaSans",
         )
 
+        self._content_width = A4[0] - 1.5 * inch
+
+        # Modern section band (solid purple, white heading, orange accent rule).
+        self._section_title_style = ParagraphStyle(
+            "VrikaSectionTitle",
+            fontName="PlusJakartaSans",
+            fontSize=13,
+            leading=16,
+            textColor=white,
+            alignment=TA_LEFT,
+        )
+        self._subsection_title_style = ParagraphStyle(
+            "VrikaSubsectionTitle",
+            fontName="PlusJakartaSans",
+            fontSize=11,
+            leading=14,
+            textColor=COLOR_VRIKA_PURPLE,
+            alignment=TA_LEFT,
+        )
+        # Table cell styles (sans-serif everywhere, no monospace headers).
+        self._th_left = ParagraphStyle(
+            "VrikaThLeft",
+            fontName="PlusJakartaSans",
+            fontSize=9.5,
+            leading=12,
+            textColor=white,
+            alignment=TA_LEFT,
+        )
+        self._th_center = ParagraphStyle(
+            "VrikaThCenter", parent=self._th_left, alignment=TA_CENTER
+        )
+        self._td_left = ParagraphStyle(
+            "VrikaTdLeft",
+            fontName="PlusJakartaSans",
+            fontSize=9,
+            leading=12,
+            textColor=COLOR_TEXT_DARK,
+            alignment=TA_LEFT,
+        )
+        self._td_center = ParagraphStyle(
+            "VrikaTdCenter", parent=self._td_left, alignment=TA_CENTER
+        )
+        self._cover_title_style = ParagraphStyle(
+            "VrikaCoverTitle",
+            fontName="PlusJakartaSans",
+            fontSize=26,
+            leading=30,
+            textColor=COLOR_VRIKA_PURPLE,
+            alignment=TA_CENTER,
+        )
+        self._cover_subtitle_style = ParagraphStyle(
+            "VrikaCoverSubtitle",
+            fontName="PlusJakartaSans",
+            fontSize=12,
+            leading=16,
+            textColor=COLOR_VRIKA_PURPLE,
+            alignment=TA_CENTER,
+        )
+        self._meta_style = ParagraphStyle(
+            "VrikaMeta",
+            fontName="PlusJakartaSans",
+            fontSize=9,
+            leading=12,
+            textColor=COLOR_TEXT_MUTED,
+            alignment=TA_CENTER,
+        )
+        self._meta_value_style = ParagraphStyle(
+            "VrikaMetaValue",
+            fontName="PlusJakartaSans",
+            fontSize=10.5,
+            leading=13,
+            textColor=COLOR_TEXT_DARK,
+            alignment=TA_CENTER,
+        )
+
+    def _section_header(self, title: str, top_gap: float = 0.22) -> list[Any]:
+        """A solid purple section band with an orange accent rule."""
+        band = Table(
+            [[Paragraph(title, self._section_title_style)]],
+            colWidths=[self._content_width],
+        )
+        band.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_VRIKA_PURPLE),
+                    ("LINEBEFORE", (0, 0), (0, -1), 4, COLOR_VRIKA_ACCENT),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 12),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ]
+            )
+        )
+        return [Spacer(1, top_gap * inch), band, Spacer(1, 0.12 * inch)]
+
+    def _subsection_header(self, title: str) -> Table:
+        """A lighter pale-purple band for sub-groups (e.g. appendix domains)."""
+        band = Table(
+            [[Paragraph(title, self._subsection_title_style)]],
+            colWidths=[self._content_width],
+        )
+        band.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_VRIKA_PURPLE_PALE),
+                    ("LINEBEFORE", (0, 0), (0, -1), 3, COLOR_VRIKA_PURPLE),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ]
+            )
+        )
+        return band
+
+    def _severity_cell_style(self, severity: str) -> ParagraphStyle:
+        color = SEVERITY_TEXT_COLORS.get(severity.strip().lower(), "#374151")
+        return ParagraphStyle(
+            f"VrikaSev_{severity}",
+            parent=self._td_center,
+            textColor=HexColor(color),
+        )
+
+    def _styled_table(
+        self,
+        data: list[dict[str, Any]],
+        columns: list[ColumnConfig],
+        severity_field: str | None = None,
+    ) -> Table:
+        """Branded data table: sans headers, soft striping, severity coloring."""
+        header_cells = [
+            Paragraph(
+                f"<b>{escape_html(c.header)}</b>",
+                self._th_left if c.align == "LEFT" else self._th_center,
+            )
+            for c in columns
+        ]
+        table_data: list[list[Any]] = [header_cells]
+        for item in data:
+            row: list[Any] = []
+            for c in columns:
+                value = c.field(item) if callable(c.field) else item.get(c.field, "")
+                text = "" if value is None else str(value)
+                if severity_field and c.field == severity_field:
+                    cell_style = self._severity_cell_style(text)
+                    row.append(Paragraph(f"<b>{escape_html(text)}</b>", cell_style))
+                else:
+                    cell_style = self._td_left if c.align == "LEFT" else self._td_center
+                    row.append(Paragraph(escape_html(text), cell_style))
+            table_data.append(row)
+
+        table = Table(
+            table_data, colWidths=[c.width for c in columns], repeatRows=1
+        )
+        style = [
+            ("BACKGROUND", (0, 0), (-1, 0), COLOR_VRIKA_PURPLE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, 0), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+            ("TOPPADDING", (0, 1), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [white, COLOR_VRIKA_PURPLE_PALE]),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.4, COLOR_GRID_LIGHT),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.2, COLOR_VRIKA_ACCENT),
+        ]
+        for idx, col in enumerate(columns):
+            style.append(("ALIGN", (idx, 0), (idx, -1), col.align))
+        table.setStyle(TableStyle(style))
+        return table
+
     def generate(
         self,
         tenant_id: str,
@@ -456,18 +647,11 @@ class VrikaScanReportGenerator:
         elements: list[Any] = []
         logo_path = get_primary_logo_path()
         if os.path.exists(logo_path):
-            elements.append(Image(logo_path, width=1.8 * inch, height=0.9 * inch))
-
-        completed = scan.completed_at or scan.inserted_at
-        meta_bits = [
-            f"<b>Provider:</b> {provider.provider.upper()}",
-            f"<b>Account:</b> {provider.uid or 'N/A'}",
-        ]
-        if completed:
-            meta_bits.append(f"<b>Completed:</b> {completed.strftime('%b %d, %Y')}")
-        meta_bits.append(f"<b>Resources:</b> {scan.unique_resource_count:,}")
-        elements.append(Paragraph(" &nbsp;|&nbsp; ".join(meta_bits), self._body_style))
-        elements.append(Spacer(1, 0.15 * inch))
+            logo = Image(logo_path, width=2.0 * inch, height=1.0 * inch)
+            logo.hAlign = "CENTER"
+            elements.append(Spacer(1, 0.1 * inch))
+            elements.append(logo)
+            elements.append(Spacer(1, 0.12 * inch))
 
         report_type = (
             "Full Security Report"
@@ -475,38 +659,92 @@ class VrikaScanReportGenerator:
             else "Executive Security Report"
         )
         elements.append(
-            Paragraph("Vrika Security Posture Report", self.styles["title"])
+            Paragraph("Cloud Security Posture Report", self._cover_title_style)
         )
-        elements.append(
-            Paragraph(
-                f"{report_type} — {provider.alias or provider.uid or 'Cloud Account'}",
-                self.styles["h2"],
+
+        # Subtitle chip: report type + account, on a pale purple rounded band.
+        subtitle_text = (
+            f"{report_type} &nbsp;•&nbsp; "
+            f"{provider.alias or provider.uid or 'Cloud Account'}"
+        )
+        chip = Table(
+            [[Paragraph(subtitle_text, self._cover_subtitle_style)]],
+            colWidths=[self._content_width * 0.72],
+        )
+        chip.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_VRIKA_PURPLE_PALE),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ("LINEBELOW", (0, 0), (-1, -1), 2, COLOR_VRIKA_PURPLE),
+                    ("LINEABOVE", (0, 0), (-1, -1), 2, COLOR_VRIKA_PURPLE),
+                ]
             )
         )
-        elements.append(Spacer(1, 0.1 * inch))
+        chip.hAlign = "CENTER"
+        elements.append(Spacer(1, 0.06 * inch))
+        elements.append(chip)
+        elements.append(Spacer(1, 0.18 * inch))
+
+        # Meta strip: 4 evenly-spaced label/value pairs on a subtle card.
+        completed = scan.completed_at or scan.inserted_at
+        completed_text = completed.strftime("%b %d, %Y") if completed else "N/A"
+        meta_pairs = [
+            ("PROVIDER", provider.provider.upper()),
+            ("ACCOUNT", provider.uid or "N/A"),
+            ("COMPLETED", completed_text),
+            ("RESOURCES", f"{scan.unique_resource_count:,}"),
+        ]
+        meta_cells = [
+            [
+                Table(
+                    [
+                        [Paragraph(label, self._meta_style)],
+                        [Paragraph(value, self._meta_value_style)],
+                    ],
+                    colWidths=[self._content_width / len(meta_pairs)],
+                )
+                for label, value in meta_pairs
+            ]
+        ]
+        meta = Table(
+            meta_cells,
+            colWidths=[self._content_width / len(meta_pairs)] * len(meta_pairs),
+        )
+        meta.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), HexColor("#FBFAFE")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("BOX", (0, 0), (-1, -1), 0.5, COLOR_GRID_LIGHT),
+                    ("LINEAFTER", (0, 0), (-2, -1), 0.5, COLOR_GRID_LIGHT),
+                ]
+            )
+        )
+        elements.append(meta)
+        elements.append(Spacer(1, 0.05 * inch))
         return elements
 
     def _executive_summary(self, ctx: ScanNarrativeContext) -> list[Any]:
-        elements: list[Any] = [Paragraph("Executive Summary", self.styles["h1"])]
+        elements: list[Any] = self._section_header("Executive Summary")
         for paragraph in build_executive_summary_paragraphs(ctx):
             elements.append(Paragraph(paragraph, self._body_style))
             elements.append(Spacer(1, 0.08 * inch))
         return elements
 
     def _key_observations(self, ctx: ScanNarrativeContext) -> list[Any]:
-        elements: list[Any] = [
-            Spacer(1, 0.1 * inch),
-            Paragraph("Key Observations", self.styles["h1"]),
-        ]
+        elements: list[Any] = self._section_header("Key Observations")
         for bullet in build_key_observations(ctx):
             elements.append(Paragraph(f"• {bullet}", self._bullet_style))
         return elements
 
     def _account_overview(self, scan: Scan, provider: Provider) -> list[Any]:
-        elements: list[Any] = [
-            Spacer(1, 0.12 * inch),
-            Paragraph("Account Overview", self.styles["h1"]),
-        ]
+        elements: list[Any] = self._section_header("Account Overview")
         completed = scan.completed_at or scan.inserted_at
         rows = [
             ["Provider", provider.provider.upper()],
@@ -525,13 +763,17 @@ class VrikaScanReportGenerator:
                 [
                     ("BACKGROUND", (0, 0), (0, -1), COLOR_VRIKA_PURPLE),
                     ("TEXTCOLOR", (0, 0), (0, -1), (1, 1, 1)),
+                    ("TEXTCOLOR", (1, 0), (1, -1), COLOR_TEXT_DARK),
                     ("FONTNAME", (0, 0), (-1, -1), "PlusJakartaSans"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
-                    ("GRID", (0, 0), (-1, -1), 0.5, COLOR_VRIKA_PURPLE_LIGHT),
-                    ("BACKGROUND", (1, 0), (1, -1), COLOR_VRIKA_PURPLE_PALE),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+                    ("LINEBELOW", (0, 0), (-1, -1), 0.5, COLOR_GRID_LIGHT),
+                    ("BOX", (0, 0), (-1, -1), 0.5, COLOR_GRID_LIGHT),
+                    ("ROWBACKGROUNDS", (1, 0), (1, -1), [white, HexColor("#FBFAFE")]),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ]
             )
         )
@@ -544,10 +786,7 @@ class VrikaScanReportGenerator:
         score: float,
         severity: dict[str, int],
     ) -> list[Any]:
-        elements: list[Any] = [
-            Spacer(1, 0.15 * inch),
-            Paragraph("Controls Overview", self.styles["h1"]),
-        ]
+        elements: list[Any] = self._section_header("Controls Overview")
         evaluated = stats["passed"] + stats["failed"]
 
         left_rows = [
@@ -625,9 +864,7 @@ class VrikaScanReportGenerator:
         return elements
 
     def _security_domains(self, domains: list[DomainSummaryRow]) -> list[Any]:
-        elements: list[Any] = [
-            Paragraph("Security Domains at a Glance", self.styles["h1"])
-        ]
+        elements: list[Any] = self._section_header("Security Domains at a Glance")
         if not domains:
             elements.append(
                 Paragraph("No domain summary data available.", self._body_style)
@@ -644,31 +881,24 @@ class VrikaScanReportGenerator:
             for d in domains[:12]
         ]
         columns = [
-            ColumnConfig("Domain", 2.4 * inch, "domain", align="LEFT"),
-            ColumnConfig("Failed", 0.9 * inch, "failed"),
-            ColumnConfig("Critical+High", 1.1 * inch, "critical_high"),
-            ColumnConfig("Pass rate", 1.0 * inch, "pass_rate"),
+            ColumnConfig("Domain", 2.6 * inch, "domain", align="LEFT"),
+            ColumnConfig("Failed", 1.0 * inch, "failed"),
+            ColumnConfig("Critical + High", 1.5 * inch, "critical_high"),
+            ColumnConfig("Pass rate", 1.1 * inch, "pass_rate"),
         ]
-        elements.append(
-            create_data_table(
-                data=rows,
-                columns=columns,
-                header_color=COLOR_VRIKA_PURPLE,
-                normal_style=self.styles["normal_center"],
-            )
-        )
+        elements.append(self._styled_table(rows, columns))
         return elements
 
     def _compliance_overview(self, cards: list[FrameworkCard]) -> list[Any]:
-        elements: list[Any] = [
-            Paragraph("Compliance Overview", self.styles["h1"]),
+        elements: list[Any] = self._section_header("Compliance Overview")
+        elements.append(
             Paragraph(
                 "Top frameworks ranked by compliance score (worst first). "
                 "Each card summarizes requirement pass/fail status for the scan.",
                 self._body_style,
-            ),
-            Spacer(1, 0.1 * inch),
-        ]
+            )
+        )
+        elements.append(Spacer(1, 0.1 * inch))
         card_title_style = ParagraphStyle(
             "CardTitle",
             parent=self._body_style,
@@ -687,15 +917,15 @@ class VrikaScanReportGenerator:
         return elements
 
     def _top_risks(self, risks: list[TopRiskRow]) -> list[Any]:
-        elements: list[Any] = [
-            Paragraph("Top Critical &amp; High Risks", self.styles["h1"]),
+        elements: list[Any] = self._section_header("Top Critical &amp; High Risks")
+        elements.append(
             Paragraph(
                 "Highest-priority failed checks deduplicated by control, "
                 "ordered by severity and affected resources.",
                 self._body_style,
-            ),
-            Spacer(1, 0.08 * inch),
-        ]
+            )
+        )
+        elements.append(Spacer(1, 0.08 * inch))
         rows = [
             {
                 "title": truncate_text(r.title, 80),
@@ -706,26 +936,18 @@ class VrikaScanReportGenerator:
             for r in risks
         ]
         columns = [
-            ColumnConfig("Risk", 2.3 * inch, "title", align="LEFT"),
-            ColumnConfig("Severity", 0.75 * inch, "severity"),
-            ColumnConfig("Resources", 0.8 * inch, "resources"),
-            ColumnConfig("Why it matters", 2.35 * inch, "why", align="LEFT"),
+            ColumnConfig("Risk", 2.5 * inch, "title", align="LEFT"),
+            ColumnConfig("Severity", 0.85 * inch, "severity"),
+            ColumnConfig("Resources", 0.85 * inch, "resources"),
+            ColumnConfig("Why it matters", 2.05 * inch, "why", align="LEFT"),
         ]
         elements.append(
-            create_data_table(
-                data=rows,
-                columns=columns,
-                header_color=COLOR_VRIKA_PURPLE,
-                normal_style=self.styles["normal_center"],
-            )
+            self._styled_table(rows, columns, severity_field="severity")
         )
         return elements
 
     def _recommended_next_steps(self, ctx: ScanNarrativeContext) -> list[Any]:
-        elements: list[Any] = [
-            Spacer(1, 0.12 * inch),
-            Paragraph("Recommended Next Steps", self.styles["h1"]),
-        ]
+        elements: list[Any] = self._section_header("Recommended Next Steps")
         for step in build_recommended_next_steps(ctx):
             elements.append(Paragraph(f"• {step}", self._bullet_style))
         return elements
@@ -736,20 +958,22 @@ class VrikaScanReportGenerator:
         scan_id: str,
         domains: list[DomainSummaryRow],
     ) -> list[Any]:
-        elements: list[Any] = [
-            Paragraph("Appendix — Findings by Security Domain", self.styles["h1"]),
+        elements: list[Any] = self._section_header(
+            "Appendix — Findings by Security Domain"
+        )
+        elements.append(
             Paragraph(
                 "Detailed failed checks grouped by domain. Each row is deduplicated "
                 f"by control (top {APPENDIX_CHECKS_PER_DOMAIN} per domain).",
                 self._body_style,
-            ),
-            Spacer(1, 0.1 * inch),
-        ]
+            )
+        )
+        elements.append(Spacer(1, 0.1 * inch))
         columns = [
             ColumnConfig("Risk", 2.2 * inch, "title", align="LEFT"),
-            ColumnConfig("Severity", 0.75 * inch, "severity"),
-            ColumnConfig("Resources", 0.75 * inch, "resources"),
-            ColumnConfig("Summary", 2.5 * inch, "description", align="LEFT"),
+            ColumnConfig("Severity", 0.85 * inch, "severity"),
+            ColumnConfig("Resources", 0.85 * inch, "resources"),
+            ColumnConfig("Summary", 2.35 * inch, "description", align="LEFT"),
         ]
 
         for domain in domains[:APPENDIX_DOMAIN_LIMIT]:
@@ -758,22 +982,16 @@ class VrikaScanReportGenerator:
             appendix_rows = _load_appendix_rows(tenant_id, scan_id, domain.category)
             if not appendix_rows:
                 continue
+            elements.append(Spacer(1, 0.08 * inch))
             elements.append(
-                Paragraph(
-                    _humanize_category(domain.category),
-                    self.styles["h2"],
-                )
+                self._subsection_header(_humanize_category(domain.category))
             )
+            elements.append(Spacer(1, 0.06 * inch))
             chunk_size = FINDINGS_TABLE_CHUNK_SIZE
             for start in range(0, len(appendix_rows), chunk_size):
                 chunk = appendix_rows[start : start + chunk_size]
                 elements.append(
-                    create_data_table(
-                        data=chunk,
-                        columns=columns,
-                        header_color=COLOR_VRIKA_PURPLE,
-                        normal_style=self.styles["normal_center"],
-                    )
+                    self._styled_table(chunk, columns, severity_field="severity")
                 )
                 elements.append(Spacer(1, 0.08 * inch))
         return elements
