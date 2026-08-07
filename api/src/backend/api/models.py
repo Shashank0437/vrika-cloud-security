@@ -3113,3 +3113,45 @@ class TenantComplianceSummary(RowLevelSecurityProtectedModel):
                 statements=["SELECT", "INSERT", "UPDATE", "DELETE"],
             ),
         ]
+
+
+class TenantBranding(RowLevelSecurityProtectedModel):
+    """
+    Per-tenant white-label branding for generated reports.
+
+    Singleton per tenant (one row). Stores an optional custom logo (base64) used
+    on PDF report headers in place of the default product logo. When no custom
+    logo is set, report generation falls back to the default logo.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    inserted_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    # Base64-encoded image bytes (no data-URI prefix). Empty means "use default".
+    logo_base64 = models.TextField(blank=True, default="")
+    # MIME type of the stored logo, e.g. "image/png" or "image/jpeg".
+    logo_content_type = models.CharField(max_length=100, blank=True, default="")
+    # Original filename supplied at upload time (for display only).
+    logo_filename = models.CharField(max_length=255, blank=True, default="")
+
+    def __str__(self):
+        return f"Report branding for tenant {self.tenant_id}"
+
+    class Meta(RowLevelSecurityProtectedModel.Meta):
+        db_table = "tenant_branding"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=("tenant_id",),
+                name="unique_tenant_branding",
+            ),
+            RowLevelSecurityConstraint(
+                field="tenant_id",
+                name="rls_on_%(class)s",
+                statements=["SELECT", "INSERT", "UPDATE", "DELETE"],
+            ),
+        ]
+
+    class JSONAPIMeta:
+        resource_name = "tenant-branding"

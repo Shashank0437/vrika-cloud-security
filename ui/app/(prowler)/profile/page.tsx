@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getSamlConfig } from "@/actions/integrations/saml";
 import { getUserInfo } from "@/actions/users/users";
 import { auth } from "@/auth.config";
+import { ReportBrandingCard } from "@/components/branding/report-branding-card";
 import { SamlIntegrationCard } from "@/components/integrations/saml/saml-integration-card";
 import { Card } from "@/components/shadcn";
 import { ContentLayout } from "@/components/shadcn/content-layout";
@@ -116,6 +117,7 @@ const SSRDataUser = async ({
         sessionTenantId={session?.tenantId}
       />
       {hasManageAccount && <ApiKeysCard searchParams={searchParams} />}
+      {hasManageAccount && <ReportBrandingCard />}
     </Card>
   );
 };

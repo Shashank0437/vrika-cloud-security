@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -49,7 +50,7 @@ from .vrika_branding import (
     get_branded_display_name,
     get_footer_right_text,
     get_pdf_theme,
-    get_primary_logo_path,
+    resolve_report_logo,
 )
 from .vrika_scan_cards import (
     FrameworkCard,
@@ -571,6 +572,10 @@ class VrikaScanReportGenerator:
         provider_id: str,
         output_path: str,
     ) -> None:
+        # Resolve the report logo once: tenant custom logo (if uploaded) or the
+        # default product logo. BytesIO for custom logos, a path for the default.
+        self._logo_source = resolve_report_logo(tenant_id)
+
         with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
             scan = Scan.all_objects.select_related("provider").get(id=scan_id)
             provider = (
@@ -653,11 +658,50 @@ class VrikaScanReportGenerator:
         )
         canvas.restoreState()
 
+    def _build_logo_flowable(self) -> Image | None:
+        """Build the header logo, preserving aspect ratio within a fixed box.
+
+        ``self._logo_source`` is either a filesystem path (default logo) or a
+        ``BytesIO`` (tenant custom logo). Returns ``None`` if the source is
+        missing or unreadable so the header renders without a logo.
+        """
+        from reportlab.lib.utils import ImageReader
+
+        source = getattr(self, "_logo_source", None)
+        if source is None:
+            return None
+
+        max_w, max_h = 2.2 * inch, 1.0 * inch
+        try:
+            if isinstance(source, str):
+                if not os.path.exists(source):
+                    return None
+                reader = ImageReader(source)
+                img_source: Any = source
+            else:
+                # BytesIO: read dimensions, then hand a fresh buffer to Image so
+                # the reader's cursor position cannot break rendering.
+                source.seek(0)
+                data = source.read()
+                if not data:
+                    return None
+                reader = ImageReader(io.BytesIO(data))
+                img_source = io.BytesIO(data)
+
+            iw, ih = reader.getSize()
+            if not iw or not ih:
+                return Image(img_source, width=max_w, height=max_h)
+
+            scale = min(max_w / iw, max_h / ih)
+            return Image(img_source, width=iw * scale, height=ih * scale)
+        except Exception:
+            logger.exception("Failed to build report logo flowable")
+            return None
+
     def _page_header(self, scan: Scan, provider: Provider) -> list[Any]:
         elements: list[Any] = []
-        logo_path = get_primary_logo_path()
-        if os.path.exists(logo_path):
-            logo = Image(logo_path, width=2.0 * inch, height=1.0 * inch)
+        logo = self._build_logo_flowable()
+        if logo is not None:
             logo.hAlign = "CENTER"
             elements.append(Spacer(1, 0.1 * inch))
             elements.append(logo)

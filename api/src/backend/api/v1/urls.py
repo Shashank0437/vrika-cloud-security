@@ -38,6 +38,7 @@ from api.v1.views import (
     SchemaView,
     TaskViewSet,
     TenantApiKeyViewSet,
+    TenantBrandingViewSet,
     TenantFinishACSView,
     TenantMembersViewSet,
     TenantViewSet,
@@ -188,6 +189,13 @@ urlpatterns = [
             {"get": "list", "patch": "partial_update"}
         ),
         name="lighthouse-configurations",
+    ),
+    path(
+        "tenant-branding",
+        TenantBrandingViewSet.as_view(
+            {"get": "list", "patch": "partial_update", "delete": "destroy"}
+        ),
+        name="tenant-branding",
     ),
     # API endpoint to start SAML SSO flow
     path(

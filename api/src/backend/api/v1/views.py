@@ -118,6 +118,7 @@ from api.models import (
     StateChoices,
     Task,
     TenantAPIKey,
+    TenantBranding,
     TenantComplianceSummary,
     ThreatScoreSnapshot,
     User,
@@ -183,6 +184,8 @@ from api.v1.serializers import (
     LighthouseProviderModelsSerializer,
     LighthouseTenantConfigSerializer,
     LighthouseTenantConfigUpdateSerializer,
+    TenantBrandingSerializer,
+    TenantBrandingUpdateSerializer,
     MembershipSerializer,
     MuteRuleCreateSerializer,
     MuteRuleSerializer,
@@ -7641,10 +7644,106 @@ class LighthouseTenantConfigViewSet(BaseRLSViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        tags=["Lighthouse AI"],
-        summary="List all LLM models",
-        description="List available LLM models per configured provider for the current tenant.",
+        tags=["Report Branding"],
+        summary="Get report branding",
+        description=(
+            "Retrieve the current tenant's report branding (custom logo used on "
+            "generated PDF reports). Returns a single object; the logo is exposed "
+            "as a data URI for preview, or null when the default logo is used."
+        ),
     ),
+    partial_update=extend_schema(
+        tags=["Report Branding"],
+        summary="Upload report logo",
+        description=(
+            "Upload or replace the tenant's custom report logo. Accepts a "
+            "base64-encoded PNG or JPEG (bare base64 or a data URI) up to 2 MB. "
+            "Auto-creates the branding record if it does not exist."
+        ),
+    ),
+    destroy=extend_schema(
+        tags=["Report Branding"],
+        summary="Remove report logo",
+        description=(
+            "Remove the tenant's custom report logo. Reports revert to the "
+            "default product logo."
+        ),
+    ),
+)
+class TenantBrandingViewSet(BaseRLSViewSet):
+    """
+    Singleton endpoint for tenant-level report branding.
+
+    - GET returns the single branding object (auto-created empty if missing).
+    - PATCH uploads/replaces the custom logo (upsert semantics, no ID in URL).
+    - DELETE clears the custom logo, reverting reports to the default logo.
+    """
+
+    queryset = TenantBranding.objects.all()
+    serializer_class = TenantBrandingSerializer
+    required_permissions = [Permissions.MANAGE_ACCOUNT]
+    http_method_names = ["get", "patch", "delete"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TenantBranding.objects.none()
+        return TenantBranding.objects.filter(tenant_id=self.request.tenant_id)
+
+    def get_serializer_class(self):
+        if self.action == "partial_update":
+            return TenantBrandingUpdateSerializer
+        return super().get_serializer_class()
+
+    def _get_or_create_instance(self) -> TenantBranding:
+        instance, _ = TenantBranding.objects.get_or_create(
+            tenant_id=self.request.tenant_id,
+            defaults={},
+        )
+        return instance
+
+    def get_object(self):
+        instance = self._get_or_create_instance()
+        self.check_object_permissions(self.request, instance)
+        return instance
+
+    def list(self, request, *args, **kwargs):
+        """GET singleton - returns a single object, not an array."""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        """PATCH singleton - no pk required. Auto-creates if not present."""
+        instance = self._get_or_create_instance()
+        self.check_object_permissions(request, instance)
+        try:
+            payload = json.loads(request.body)
+            attributes = payload.get("data", {}).get("attributes", {})
+        except (json.JSONDecodeError, AttributeError):
+            raise ValidationError("Invalid JSON:API payload")
+
+        serializer = self.get_serializer(instance, data=attributes, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        read_serializer = TenantBrandingSerializer(
+            instance, context=self.get_serializer_context()
+        )
+        return Response(read_serializer.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        """DELETE singleton - clear the custom logo (revert to default)."""
+        instance = self._get_or_create_instance()
+        self.check_object_permissions(request, instance)
+        instance.logo_base64 = ""
+        instance.logo_content_type = ""
+        instance.logo_filename = ""
+        instance.save(
+            update_fields=["logo_base64", "logo_content_type", "logo_filename"]
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema_view(
     retrieve=extend_schema(
         tags=["Lighthouse AI"],
         summary="Retrieve LLM model details",

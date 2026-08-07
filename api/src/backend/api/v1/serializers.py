@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -34,6 +35,7 @@ from api.models import (
     StatusChoices,
     Task,
     TenantAPIKey,
+    TenantBranding,
     ThreatScoreSnapshot,
     User,
     UserRoleRelationship,
@@ -4072,6 +4074,132 @@ class LighthouseTenantConfigUpdateSerializer(BaseWriteSerializer):
                 )
 
         return super().validate(attrs)
+
+
+# Report branding (per-tenant custom logo)
+
+# Keep small; logos are decorative header images. 2 MB decoded is generous.
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+ALLOWED_LOGO_CONTENT_TYPES = ("image/png", "image/jpeg")
+
+
+class TenantBrandingSerializer(RLSSerializer):
+    """Read serializer for per-tenant report branding (singleton)."""
+
+    url = serializers.SerializerMethodField()
+    has_custom_logo = serializers.SerializerMethodField()
+    logo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TenantBranding
+        fields = [
+            "id",
+            "inserted_at",
+            "updated_at",
+            "has_custom_logo",
+            "logo_content_type",
+            "logo_filename",
+            "logo",
+            "url",
+        ]
+        extra_kwargs = {
+            "id": {"read_only": True},
+            "inserted_at": {"read_only": True},
+            "updated_at": {"read_only": True},
+            "logo_content_type": {"read_only": True},
+            "logo_filename": {"read_only": True},
+        }
+
+    def get_url(self, obj):
+        request = self.context.get("request")
+        return reverse("tenant-branding", request=request)
+
+    def get_has_custom_logo(self, obj) -> bool:
+        return bool(obj.logo_base64)
+
+    def get_logo(self, obj) -> str | None:
+        """Return a data URI so the UI can preview the logo directly."""
+        if not obj.logo_base64:
+            return None
+        content_type = obj.logo_content_type or "image/png"
+        return f"data:{content_type};base64,{obj.logo_base64}"
+
+
+class TenantBrandingUpdateSerializer(BaseWriteSerializer):
+    """Write serializer accepting a base64-encoded logo image."""
+
+    logo_base64 = serializers.CharField(write_only=True)
+    logo_content_type = serializers.CharField(required=False, allow_blank=True)
+    logo_filename = serializers.CharField(
+        required=False, allow_blank=True, max_length=255
+    )
+
+    class Meta:
+        model = TenantBranding
+        fields = [
+            "id",
+            "logo_base64",
+            "logo_content_type",
+            "logo_filename",
+        ]
+        extra_kwargs = {
+            "id": {"read_only": True},
+        }
+
+    def validate(self, attrs):
+        raw = attrs.get("logo_base64") or ""
+        # Accept either a bare base64 string or a full data URI.
+        content_type = attrs.get("logo_content_type") or ""
+        if raw.startswith("data:"):
+            try:
+                header, encoded = raw.split(",", 1)
+            except ValueError:
+                raise ValidationError({"logo_base64": "Malformed data URI."})
+            # data:image/png;base64,....
+            if ";base64" not in header:
+                raise ValidationError(
+                    {"logo_base64": "Only base64-encoded images are supported."}
+                )
+            if not content_type:
+                content_type = header[len("data:") : header.index(";")]
+            raw = encoded
+
+        try:
+            decoded = base64.b64decode(raw, validate=True)
+        except (ValueError, binascii.Error):
+            raise ValidationError({"logo_base64": "Invalid base64 image data."})
+
+        if not decoded:
+            raise ValidationError({"logo_base64": "Empty image."})
+        if len(decoded) > MAX_LOGO_BYTES:
+            raise ValidationError(
+                {"logo_base64": "Logo exceeds the 2 MB size limit."}
+            )
+
+        detected = _detect_image_content_type(decoded)
+        if detected is None:
+            raise ValidationError(
+                {"logo_base64": "Unsupported image type. Use PNG or JPEG."}
+            )
+        # Trust the sniffed type over any client-supplied value.
+        content_type = detected
+        if content_type not in ALLOWED_LOGO_CONTENT_TYPES:
+            raise ValidationError(
+                {"logo_base64": "Unsupported image type. Use PNG or JPEG."}
+            )
+
+        attrs["logo_base64"] = base64.b64encode(decoded).decode("ascii")
+        attrs["logo_content_type"] = content_type
+        return super().validate(attrs)
+
+
+def _detect_image_content_type(data: bytes) -> str | None:
+    """Return the MIME type for PNG/JPEG magic bytes, else None."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    return None
 
 
 # Lighthouse: Provider models

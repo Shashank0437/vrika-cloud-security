@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import io
+import logging
 import os
 from dataclasses import dataclass
 
 from reportlab.lib import colors
+
+logger = logging.getLogger(__name__)
 
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), "../../assets/img")
 
@@ -79,6 +85,61 @@ def get_primary_logo_path() -> str:
         if os.path.exists(vrika_logo):
             return vrika_logo
     return os.path.join(_ASSETS_DIR, "prowler_logo.png")
+
+
+def get_tenant_logo(tenant_id: str | None) -> tuple[bytes, str] | None:
+    """Return ``(image_bytes, content_type)`` for a tenant's custom report logo.
+
+    Reads the per-tenant ``TenantBranding`` row under RLS. Returns ``None`` when
+    no tenant is given, no custom logo is set, or the stored data is unreadable
+    so callers can fall back to the default product logo.
+    """
+    if not tenant_id:
+        return None
+
+    # Import lazily to avoid import cycles (models import this module's siblings).
+    try:
+        from api.db_utils import rls_transaction
+        from api.models import TenantBranding
+    except Exception:  # pragma: no cover - defensive, keeps report generation alive
+        logger.exception("Unable to import branding dependencies")
+        return None
+
+    try:
+        with rls_transaction(str(tenant_id)):
+            branding = TenantBranding.objects.filter(tenant_id=tenant_id).first()
+    except Exception:
+        logger.exception("Failed to load tenant branding for %s", tenant_id)
+        return None
+
+    if branding is None or not branding.logo_base64:
+        return None
+
+    try:
+        image_bytes = base64.b64decode(branding.logo_base64, validate=True)
+    except (ValueError, binascii.Error):
+        logger.warning("Stored tenant logo for %s is not valid base64", tenant_id)
+        return None
+
+    if not image_bytes:
+        return None
+
+    content_type = branding.logo_content_type or "image/png"
+    return image_bytes, content_type
+
+
+def resolve_report_logo(tenant_id: str | None):
+    """Return a ReportLab-compatible logo source for a tenant.
+
+    Prefers the tenant's uploaded logo (as an in-memory ``BytesIO``); otherwise
+    falls back to the default product logo path. ReportLab's ``Image`` flowable
+    accepts either a filesystem path or a file-like object.
+    """
+    tenant_logo = get_tenant_logo(tenant_id)
+    if tenant_logo is not None:
+        image_bytes, _content_type = tenant_logo
+        return io.BytesIO(image_bytes)
+    return get_primary_logo_path()
 
 
 def brand_report_text(text: str | None) -> str:
