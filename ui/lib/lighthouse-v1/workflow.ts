@@ -23,6 +23,7 @@ import { describeTool, executeTool } from "@/lib/lighthouse-v1/tools/meta-tool";
 import { getModelParams } from "@/lib/lighthouse-v1/utils";
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import {
+  fetchVrikaServerLlmConfig,
   readEmbedLighthouseEnv,
   resolveOpenRouterLlmRouting,
 } from "@/lib/vrika-embed-lighthouse";
@@ -198,7 +199,11 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
   let providerConfig = await getProviderCredentials(providerType);
   let { credentials, base_url: baseUrl } = providerConfig;
 
-  const embedEnv = isVrikaEmbedMode() ? readEmbedLighthouseEnv() : null;
+  let embedEnv = null;
+  if (isVrikaEmbedMode()) {
+    const dynamicConfig = await fetchVrikaServerLlmConfig();
+    embedEnv = dynamicConfig || readEmbedLighthouseEnv();
+  }
 
   if (embedEnv && !hasStoredCredentials(credentials)) {
     if (embedEnv.apiKey) {
@@ -227,9 +232,16 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
     }
   }
 
+  const effectiveKey = readApiKey(credentials);
+  if (!effectiveKey) {
+    throw new Error(
+      "LLM provider is not configured. Please configure an active AI provider in Settings > LLM Configuration.",
+    );
+  }
+
   const routed = resolveOpenRouterLlmRouting(
     providerType,
-    readApiKey(credentials),
+    effectiveKey,
     baseUrl,
   );
   providerType = routed.provider as ProviderType;

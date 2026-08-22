@@ -531,13 +531,33 @@ export const Chat = ({
             : "w-full px-4 pb-16 md:max-w-3xl md:pb-16",
         )}
       >
+        {!hasConfig && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs text-foreground backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-base text-amber-500 font-bold" aria-hidden>⚠️</span>
+              <span>
+                <strong>LLM Not Configured:</strong> Please configure an active AI model in Settings to use Vrika AI.
+              </span>
+            </div>
+            <a
+              href="/dashboard/settings?tab=llm"
+              target="_top"
+              className="flex shrink-0 items-center gap-1 rounded-lg bg-[#684cb6] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.98]"
+            >
+              Configure LLM →
+            </a>
+          </div>
+        )}
+
         <PromptInput
           className={cn(
             embedMode &&
               "[&_[data-slot=input-group]]:border-border-neutral-secondary [&_[data-slot=input-group]]:bg-bg-neutral-primary [&_[data-slot=input-group]]:rounded-[1.25rem] [&_[data-slot=input-group]]:shadow-[0_14px_40px_-24px_rgba(49,39,89,0.38)] [&_[data-slot=input-group]]:ring-1 [&_[data-slot=input-group]]:ring-black/[0.04]",
+            !hasConfig && "opacity-75",
           )}
           onSubmit={(message) => {
             if (
+              !hasConfig ||
               status === MESSAGE_STATUS.STREAMING ||
               status === MESSAGE_STATUS.SUBMITTED
             ) {
@@ -554,8 +574,11 @@ export const Chat = ({
         >
           <PromptInputBody>
             <PromptInputTextarea
+              disabled={!hasConfig}
               placeholder={
-                error || errorMessage
+                !hasConfig
+                  ? "LLM provider is not configured. Go to Settings > LLM Configuration to configure an AI provider."
+                  : error || errorMessage
                   ? "Edit your message and try again..."
                   : "Type your message..."
               }
@@ -565,6 +588,7 @@ export const Chat = ({
               }
               className={cn(
                 embedMode && "min-h-[4.5rem] pt-3.5 text-[14px] leading-snug",
+                !hasConfig && "cursor-not-allowed opacity-60",
               )}
             />
           </PromptInputBody>
@@ -629,9 +653,10 @@ export const Chat = ({
                 }
               }}
               disabled={
-                !uiState.inputValue?.trim() &&
-                status !== MESSAGE_STATUS.STREAMING &&
-                status !== MESSAGE_STATUS.SUBMITTED
+                !hasConfig ||
+                (!uiState.inputValue?.trim() &&
+                  status !== MESSAGE_STATUS.STREAMING &&
+                  status !== MESSAGE_STATUS.SUBMITTED)
               }
             />
           </PromptInputToolbar>

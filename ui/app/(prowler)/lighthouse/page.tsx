@@ -109,14 +109,12 @@ export default async function AIChatbot({
     if (embedMode) {
       return (
         <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-          <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
-            AI assistant is not available yet. Ask your Vrika administrator to
-            configure{" "}
-            <code className="text-text-neutral-primary">VRIKA_LLM_API_KEY</code>
-            , <code className="text-text-neutral-primary">VRIKA_LLM_URL</code>,
-            and{" "}
-            <code className="text-text-neutral-primary">VRIKA_LLM_MODEL</code>{" "}
-            on the Cloud Security server.
+          <div className="mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6">
+            <Chat
+              hasConfig={false}
+              providers={[]}
+              hideModelSelector={true}
+            />
           </div>
         </ContentLayout>
       );
@@ -132,9 +130,12 @@ export default async function AIChatbot({
     if (embedMode) {
       return (
         <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-          <div className="text-text-neutral-secondary mx-auto max-w-lg py-16 text-center text-sm">
-            AI assistant configuration is incomplete. Contact your Vrika
-            administrator.
+          <div className="mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6">
+            <Chat
+              hasConfig={false}
+              providers={[]}
+              hideModelSelector={true}
+            />
           </div>
         </ContentLayout>
       );
