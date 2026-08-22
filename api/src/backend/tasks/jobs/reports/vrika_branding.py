@@ -131,14 +131,34 @@ def get_tenant_logo(tenant_id: str | None) -> tuple[bytes, str] | None:
 def resolve_report_logo(tenant_id: str | None):
     """Return a ReportLab-compatible logo source for a tenant.
 
-    Prefers the tenant's uploaded logo (as an in-memory ``BytesIO``); otherwise
-    falls back to the default product logo path. ReportLab's ``Image`` flowable
-    accepts either a filesystem path or a file-like object.
+    Resolution order:
+      1. The org's custom logo from vrika-server's central config (internal API).
+      2. A locally-stored ``TenantBranding`` logo (fallback if the internal API
+         is unavailable or has no logo).
+      3. The default product logo path.
+
+    ReportLab's ``Image`` flowable accepts a filesystem path or a file-like
+    object, so this returns either a ``BytesIO`` (custom logo) or a path.
     """
+    # 1. Central config (single source of truth in vrika-server).
+    try:
+        from .vrika_config_client import get_tenant_logo_from_config
+
+        config_logo = get_tenant_logo_from_config(tenant_id)
+    except Exception:  # pragma: no cover - never let config lookup break reports
+        logger.exception("Failed to fetch org logo from central config")
+        config_logo = None
+    if config_logo is not None:
+        image_bytes, _content_type = config_logo
+        return io.BytesIO(image_bytes)
+
+    # 2. Local TenantBranding fallback.
     tenant_logo = get_tenant_logo(tenant_id)
     if tenant_logo is not None:
         image_bytes, _content_type = tenant_logo
         return io.BytesIO(image_bytes)
+
+    # 3. Default product logo.
     return get_primary_logo_path()
 
 
