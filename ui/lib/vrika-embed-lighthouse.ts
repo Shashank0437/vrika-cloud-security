@@ -102,3 +102,38 @@ export function resolveOpenRouterLlmRouting(
 
   return { provider, baseUrl };
 }
+
+/**
+ * Dynamically query vrika-server's central settings store for the active organization's LLM credentials.
+ */
+export async function fetchVrikaServerLlmConfig(): Promise<{
+  apiKey: string;
+  model: string;
+  provider: LighthouseProvider;
+  baseUrl: string | undefined;
+} | null> {
+  const secret = process.env.VRIKA_BRIDGE_SECRET?.trim() || "";
+  const serverUrl = process.env.VRIKA_SERVER_API_URL?.trim() || "http://vrika-server-api:8000";
+
+  if (!secret) return null;
+
+  try {
+    const res = await fetch(`${serverUrl}/org/settings/llm/internal-resolve?secret=${encodeURIComponent(secret)}`, {
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.configured || !data.api_key) return null;
+
+    const apiKey = String(data.api_key).trim();
+    const baseUrl = data.base_url?.trim() || (data.provider === "openrouter" ? "https://openrouter.ai/api/v1" : undefined);
+    const provider = normalizeLighthouseProvider(data.provider, data.provider === "openrouter", Boolean(baseUrl));
+    const model = data.model || "openai/gpt-4.1-mini";
+
+    return { apiKey, model, provider, baseUrl };
+  } catch (err) {
+    console.warn("[Vrika embed] Failed to resolve dynamic LLM from vrika-server:", err);
+    return null;
+  }
+}

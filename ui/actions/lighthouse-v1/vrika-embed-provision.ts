@@ -12,7 +12,10 @@ import {
 import { getTask } from "@/actions/task/tasks";
 import { checkTaskStatus } from "@/lib/helper";
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
-import { readEmbedLighthouseEnv } from "@/lib/vrika-embed-lighthouse";
+import {
+  fetchVrikaServerLlmConfig,
+  readEmbedLighthouseEnv,
+} from "@/lib/vrika-embed-lighthouse";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
 async function waitForTask(taskId: string, label: string): Promise<void> {
@@ -93,7 +96,7 @@ async function ensureProviderActive(
 }
 
 /**
- * Seed Lighthouse tenant LLM config from Vrika platform env (embed mode only).
+ * Seed Lighthouse tenant LLM config from Vrika platform (dynamic settings or env).
  * Provider/model UI stays hidden; credentials never enter the browser.
  */
 export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
@@ -101,10 +104,14 @@ export async function ensureVrikaEmbedLighthouseConfig(): Promise<boolean> {
     return false;
   }
 
-  const { apiKey, model, provider, baseUrl } = readEmbedLighthouseEnv();
+  // First attempt dynamic resolution from vrika-server's central settings
+  const dynamicConfig = await fetchVrikaServerLlmConfig();
+  const { apiKey, model, provider, baseUrl } =
+    dynamicConfig || readEmbedLighthouseEnv();
+
   if (!apiKey) {
     console.error(
-      "[Vrika embed] Lighthouse not configured: set VRIKA_LLM_API_KEY, VRIKA_LLM_URL, and VRIKA_LLM_MODEL",
+      "[Vrika embed] Lighthouse not configured: configure an active LLM in Vrika Settings or set VRIKA_LLM_API_KEY",
     );
     return false;
   }
