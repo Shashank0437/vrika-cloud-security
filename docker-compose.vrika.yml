@@ -26,6 +26,7 @@ services:
         NEXT_PUBLIC_VRIKA_EMBED_MODE: "true"
         NEXT_PUBLIC_PROWLER_RELEASE_VERSION: ${NEXT_PUBLIC_PROWLER_RELEASE_VERSION:-v5.34.0}
     image: vrika-prowler-ui:local
+    restart: unless-stopped
     ports: !reset []
     environment:
       VRIKA_LLM_API_KEY: ${VRIKA_LLM_API_KEY:-}
@@ -41,10 +42,15 @@ services:
       start_period: 90s
 
   worker:
+    restart: unless-stopped
     environment:
       VRIKA_PDF_BRANDING: "true"
 
+  worker-beat:
+    restart: unless-stopped
+
   api:
+    restart: unless-stopped
     ports: !reset []
     environment:
       VRIKA_PDF_BRANDING: "true"
@@ -56,18 +62,31 @@ services:
       retries: 16
 
   mcp-server:
+    restart: unless-stopped
     ports: !reset []
 
   postgres:
+    restart: unless-stopped
     ports: !reset []
 
   valkey:
+    restart: unless-stopped
     ports: !reset []
 
   neo4j:
+    restart: unless-stopped
     ports: !reset []
     healthcheck:
       start_period: 180s
       interval: 15s
       timeout: 15s
       retries: 20
+
+# Reuse the pre-existing shared network so prowler services and the vrika-server
+# stack can reach each other by container name. The network must already exist
+# (created for the vrika-server <-> prowler bridge); on a fresh host create it
+# once with: docker network create vrika-cloud-security_default
+networks:
+  default:
+    external: true
+    name: vrika-cloud-security_default
