@@ -7,13 +7,34 @@ from dataclasses import dataclass
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image,
+    KeepTogether,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from .components import escape_html, truncate_text
 from .vrika_branding import COLOR_VRIKA_PURPLE_LIGHT
 
 COLOR_COMPLIANT = colors.HexColor("#87ae73")
 COLOR_NON_COMPLIANT = colors.HexColor("#AD151A")
+
+
+def _fit_logo(path: str, max_w: float, max_h: float) -> Image | None:
+    """Return an Image scaled to fit within (max_w, max_h), preserving ratio."""
+    from reportlab.lib.utils import ImageReader
+
+    reader = ImageReader(path)
+    iw, ih = reader.getSize()
+    if not iw or not ih:
+        return Image(path, width=max_w, height=max_h)
+    scale = min(max_w / iw, max_h / ih)
+    img = Image(path, width=iw * scale, height=ih * scale)
+    img.hAlign = "LEFT"
+    return img
 
 
 @dataclass(frozen=True)
@@ -24,6 +45,7 @@ class FrameworkCard:
     failed: int
     total: int
     services: str
+    logo_path: str | None = None
 
 
 def build_framework_card(
@@ -42,7 +64,33 @@ def build_framework_card(
         score_line = "No evaluated requirements"
 
     services = escape_html(truncate_text(card.services or "N/A", 120))
-    header = Paragraph(f"<b>{title}</b>", title_style)
+    title_para = Paragraph(f"<b>{title}</b>", title_style)
+
+    # Header: framework logo (if available) + name, so cards match the
+    # Compliance section's per-framework branding.
+    header: object = title_para
+    if card.logo_path:
+        try:
+            logo = _fit_logo(card.logo_path, max_w=0.9 * inch, max_h=0.42 * inch)
+        except Exception:
+            logo = None
+        if logo is not None:
+            header_tbl = Table(
+                [[logo, title_para]],
+                colWidths=[0.95 * inch, 3.85 * inch],
+            )
+            header_tbl.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (0, 0), 8),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            header = header_tbl
     stats_row = [
         [
             Paragraph(
@@ -103,8 +151,16 @@ def build_framework_card_grid(
     """Return flowables for a vertical stack of framework cards."""
     flowables: list = []
     for card in cards:
-        flowables.append(build_framework_card(card, title_style, body_style))
-        flowables.append(Spacer(1, 0.12 * inch))
+        # Keep each card (and its trailing gap) together so a card is never
+        # split across a page boundary — move the whole card to the next page.
+        flowables.append(
+            KeepTogether(
+                [
+                    build_framework_card(card, title_style, body_style),
+                    Spacer(1, 0.12 * inch),
+                ]
+            )
+        )
     return flowables
 
 

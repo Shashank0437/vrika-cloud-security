@@ -14,6 +14,58 @@ from reportlab.lib import colors
 logger = logging.getLogger(__name__)
 
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), "../../assets/img")
+_COMPLIANCE_LOGO_DIR = os.path.join(
+    os.path.dirname(__file__), "../../assets/compliance"
+)
+
+# Keyword -> compliance logo filename, mirroring the UI's getComplianceIcon.
+# Order matters: framework-specific keywords come before the generic "aws"
+# so AWS-suffixed compliance ids (e.g. cis_4.0_aws) resolve to the framework
+# logo, and only AWS-only frameworks fall through to the AWS logo.
+_COMPLIANCE_LOGO_MAP: tuple[tuple[str, str], ...] = (
+    ("essential", "asd-essential-eight.png"),
+    ("cisa", "cisa.png"),
+    ("cis", "cis.png"),
+    ("ens", "ens.png"),
+    ("ffiec", "ffiec.png"),
+    ("fedramp", "fedramp.png"),
+    ("gdpr", "gdpr.png"),
+    ("gxp", "gxp-aws.png"),
+    ("hipaa", "hipaa.png"),
+    ("iso", "iso-27001.png"),
+    ("mitre", "mitre-attack.png"),
+    ("nist", "nist.png"),
+    ("nis2", "nis2.png"),
+    ("pci", "pci-dss.png"),
+    ("rbi", "rbi.png"),
+    ("soc2", "soc2.png"),
+    ("kisa", "kisa.png"),
+    ("threatscore", "prowlerThreat.png"),
+    ("c5", "c5.png"),
+    ("ccc", "ccc.png"),
+    ("csa", "csa.png"),
+    ("dora", "dora.png"),
+    ("secnumcloud", "anssi.png"),
+    ("okta", "okta.png"),
+    ("aws", "aws.png"),
+)
+
+
+def get_compliance_logo_path(framework_name: str | None) -> str | None:
+    """Return the PNG logo path for a compliance framework, or None.
+
+    Resolves by case-insensitive substring match on the framework name/id,
+    mirroring the UI's ``getComplianceIcon`` keyword ordering.
+    """
+    if not framework_name:
+        return None
+    lowered = framework_name.lower()
+    for keyword, filename in _COMPLIANCE_LOGO_MAP:
+        if keyword in lowered:
+            path = os.path.join(_COMPLIANCE_LOGO_DIR, filename)
+            return path if os.path.exists(path) else None
+    return None
+
 
 COLOR_VRIKA_PURPLE = colors.HexColor("#684CB6")
 COLOR_VRIKA_PURPLE_LIGHT = colors.HexColor("#8B7EC8")

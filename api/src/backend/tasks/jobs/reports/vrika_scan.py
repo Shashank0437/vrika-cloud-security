@@ -48,6 +48,7 @@ from .vrika_branding import (
     COLOR_VRIKA_PURPLE,
     COLOR_VRIKA_PURPLE_PALE,
     get_branded_display_name,
+    get_compliance_logo_path,
     get_footer_right_text,
     get_pdf_theme,
     resolve_report_logo,
@@ -257,6 +258,7 @@ def _load_framework_cards(
                 failed=failed_reqs,
                 total=total_reqs,
                 services=_services_from_check_ids(check_ids),
+                logo_path=get_compliance_logo_path(compliance_id),
             )
         )
 
