@@ -232,7 +232,13 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
     }
   }
 
-  const effectiveKey = readApiKey(credentials);
+  let effectiveKey = readApiKey(credentials);
+  const isLocalCustom = providerType === "openai_compatible" || Boolean(baseUrl);
+  if (!effectiveKey && isLocalCustom) {
+    effectiveKey = "local";
+    credentials = { api_key: "local" };
+  }
+
   if (!effectiveKey) {
     throw new Error(
       "LLM provider is not configured. Please configure an active AI provider in Settings > LLM Configuration.",

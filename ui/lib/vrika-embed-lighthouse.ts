@@ -123,13 +123,14 @@ export async function fetchVrikaServerLlmConfig(): Promise<{
       cache: "no-store",
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.configured || !data.api_key) return null;
+    if (!data.configured) return null;
+    const isLocalCustom = data.provider === "custom" || data.provider === "ollama" || Boolean(data.base_url);
+    if (!data.api_key && !isLocalCustom) return null;
 
-    const apiKey = String(data.api_key).trim();
+    const apiKey = String(data.api_key || (isLocalCustom ? "local" : "")).trim();
     const baseUrl = data.base_url?.trim() || (data.provider === "openrouter" ? "https://openrouter.ai/api/v1" : undefined);
     const provider = normalizeLighthouseProvider(data.provider, data.provider === "openrouter", Boolean(baseUrl));
-    const model = data.model || "openai/gpt-4.1-mini";
+    const model = data.model || (isLocalCustom ? "local-model" : "openai/gpt-4.1-mini");
 
     return { apiKey, model, provider, baseUrl };
   } catch (err) {
