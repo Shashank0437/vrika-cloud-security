@@ -42,18 +42,34 @@ services:
       start_period: 90s
 
   worker:
+    # Pin the Vrika-customised image so the deploy never falls back to the
+    # vanilla upstream :stable tag (which lacks the Vrika PDF/branding code).
+    image: prowlercloud/prowler-api:local
     restart: unless-stopped
     environment:
       VRIKA_PDF_BRANDING: "true"
+      # Central config store (org custom logo / SMTP) internal API. Baked here
+      # so a .env reset cannot silently disable custom report logos. The shared
+      # secret is resolved by the config client from VRIKA_BRIDGE_SECRET (.env),
+      # so it is intentionally not duplicated in this version-controlled file.
+      VRIKA_SERVER_INTERNAL_URL: "http://vrika-server-api:8000"
 
   worker-beat:
+    image: prowlercloud/prowler-api:local
     restart: unless-stopped
 
   api:
+    image: prowlercloud/prowler-api:local
     restart: unless-stopped
     ports: !reset []
     environment:
       VRIKA_PDF_BRANDING: "true"
+      VRIKA_SERVER_INTERNAL_URL: "http://vrika-server-api:8000"
+      # Always allow the in-network proxy hostnames the stack/host nginx use to
+      # reach Django, regardless of what the base .env provides. Without these
+      # the API returns HTTP 400 (DisallowedHost) and the UI shows "server
+      # unavailable". The public host/IP still comes from the base .env value.
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api},prowler-api,ui,10.239.37.110"
     # Z800 cold start: migrations + Gunicorn + compliance cache warm-up can exceed 3 min.
     healthcheck:
       start_period: 180s
