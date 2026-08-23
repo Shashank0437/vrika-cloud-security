@@ -2838,6 +2838,36 @@ class ScanViewSet(BaseRLSViewSet):
             return running_resp
         return self._serve_vrika_scan_pdf(scan, "full")
 
+    @action(
+        detail=True,
+        methods=["post", "get"],
+        url_path="share-email",
+        url_name="share-email",
+    )
+    def share_email(self, request, pk=None):
+        scan = self.get_object()
+        tenant_id = self.request.tenant_id
+        from tasks.jobs.report import share_vrika_scan_email_job
+        task = share_vrika_scan_email_job.delay(
+            tenant_id=str(tenant_id),
+            scan_id=str(scan.id),
+            provider_id=str(scan.provider_id),
+        )
+        return Response(
+            {"status": "queued", "task_id": str(task.id)},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    @action(
+        detail=True,
+        methods=["post", "get"],
+        url_path="vrika-report/share-email",
+        url_name="vrika-report-share-email",
+    )
+    def vrika_report_share_email(self, request, pk=None):
+        return self.share_email(request, pk=pk)
+
+
     def create(self, request, *args, **kwargs):
         input_serializer = self.get_serializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
