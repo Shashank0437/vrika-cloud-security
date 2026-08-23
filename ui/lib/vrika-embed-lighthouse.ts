@@ -123,6 +123,7 @@ export async function fetchVrikaServerLlmConfig(): Promise<{
       cache: "no-store",
     });
     if (!res.ok) return null;
+    const data = await res.json();
     if (!data.configured) return null;
     const isLocalCustom = data.provider === "custom" || data.provider === "ollama" || Boolean(data.base_url);
     if (!data.api_key && !isLocalCustom) return null;
