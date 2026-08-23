@@ -1565,6 +1565,25 @@ def generate_vrika_full_pdf_task(tenant_id: str, scan_id: str, provider_id: str)
     )
 
 
+@shared_task(
+    base=RLSTask,
+    name="scan-vrika-share-email",
+    queue="scan-reports",
+)
+@set_tenant(keep_tenant=True)
+@handle_provider_deletion
+def share_vrika_scan_email_task(tenant_id: str, scan_id: str, provider_id: str):
+    """On-demand Celery task for sharing Vrika scan reports over email."""
+    from tasks.jobs.report import share_vrika_scan_email_job
+
+    return share_vrika_scan_email_job(
+        tenant_id=tenant_id,
+        scan_id=scan_id,
+        provider_id=provider_id,
+    )
+
+
+
 @shared_task(name="findings-mute-historical")
 def mute_historical_findings_task(tenant_id: str, mute_rule_id: str):
     """

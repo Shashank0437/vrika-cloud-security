@@ -2847,11 +2847,15 @@ class ScanViewSet(BaseRLSViewSet):
     def share_email(self, request, pk=None):
         scan = self.get_object()
         tenant_id = self.request.tenant_id
-        from tasks.jobs.report import share_vrika_scan_email_job
-        task = share_vrika_scan_email_job.delay(
-            tenant_id=str(tenant_id),
-            scan_id=str(scan.id),
-            provider_id=str(scan.provider_id),
+        from config.celery import celery_app
+        task = celery_app.send_task(
+            "scan-vrika-share-email",
+            kwargs={
+                "tenant_id": str(tenant_id),
+                "scan_id": str(scan.id),
+                "provider_id": str(scan.provider_id),
+            },
+            queue="scan-reports",
         )
         return Response(
             {"status": "queued", "task_id": str(task.id)},
@@ -2866,6 +2870,7 @@ class ScanViewSet(BaseRLSViewSet):
     )
     def vrika_report_share_email(self, request, pk=None):
         return self.share_email(request, pk=pk)
+
 
 
     def create(self, request, *args, **kwargs):
