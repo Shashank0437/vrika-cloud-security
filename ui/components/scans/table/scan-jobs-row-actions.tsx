@@ -6,6 +6,7 @@ import {
   Eye,
   FileDown,
   FileText,
+  Mail,
   Pencil,
   ShieldCheck,
   TriangleAlert,
@@ -36,6 +37,7 @@ import {
   downloadScanExecutivePdf,
   downloadScanFullPdf,
   downloadScanZip,
+  shareReportOverEmail,
 } from "@/lib/helper";
 import { getScanScheduleCapability } from "@/lib/schedules";
 import { isCloud } from "@/lib/shared/env";
@@ -228,6 +230,11 @@ export function ScanJobsRowActions({
               icon={<FileDown />}
               label="Download Full PDF Report"
               onSelect={() => void downloadScanFullPdf(scan.id, toast)}
+            />
+            <ActionDropdownItem
+              icon={<Mail />}
+              label="Share Report over Email"
+              onSelect={() => void shareReportOverEmail(scan.id, toast)}
             />
           </>
         )}

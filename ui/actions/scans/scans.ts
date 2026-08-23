@@ -531,3 +531,35 @@ export const getVrikaScanPdfReport = async (
     `Vrika ${label} scan`,
   );
 };
+
+/**
+ * Share the Vrika scan report over email.
+ *
+ * Calls the backend share-email endpoint which generates PDFs and sends
+ * them to the organisation's configured SMTP recipients.
+ */
+export const shareVrikaScanReport = async (
+  scanId: string,
+): Promise<{ success: true } | { error: string }> => {
+  const headers = await getAuthHeaders({ contentType: false });
+  const url = new URL(`${apiBaseUrl}/scans/${scanId}/share-email`);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers,
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        body || "Unable to share report over email. Contact support if the issue continues.",
+      );
+    }
+
+    return { success: true };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
+};
+

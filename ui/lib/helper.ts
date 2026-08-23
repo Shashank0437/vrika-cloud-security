@@ -3,6 +3,7 @@ import {
   getComplianceOcsf,
   getCompliancePdfReport,
   getVrikaScanPdfReport,
+  shareVrikaScanReport,
   type ScanBinaryResult,
 } from "@/actions/scans";
 import { getTask } from "@/actions/task";
@@ -283,6 +284,34 @@ export const downloadScanFullPdf = async (
     description:
       "The full report is still being generated. Please try again in a few minutes.",
   });
+};
+
+export const shareReportOverEmail = async (
+  scanId: string,
+  toast: ReturnType<typeof useToast>["toast"],
+): Promise<void> => {
+  toast({
+    title: "Sending Report",
+    description: "Sharing the scan report over email. This may take a moment.",
+  });
+
+  const result = await shareVrikaScanReport(scanId);
+
+  if ("success" in result && result.success) {
+    toast({
+      title: "Report Shared",
+      description: "The scan report has been sent to your organisation's configured email recipients.",
+    });
+    return;
+  }
+
+  if ("error" in result) {
+    toast({
+      variant: "destructive",
+      title: "Email Failed",
+      description: result.error,
+    });
+  }
 };
 
 /**
