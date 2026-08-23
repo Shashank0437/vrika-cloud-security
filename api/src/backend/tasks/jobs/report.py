@@ -1593,20 +1593,23 @@ def _notify_vrika_scan_completed(
 def share_vrika_scan_email_job(
     tenant_id: str,
     scan_id: str,
-    provider_id: str,
+    provider_id: str = "",
 ) -> dict[str, bool | str]:
     """On-demand task to generate PDFs (if not already cached) and dispatch share email."""
     import os
-    from api.models import Provider
+    from api.models import Provider, Scan
     from tasks.jobs.reports.vrika_scan import (
         generate_vrika_executive_report,
         generate_vrika_full_report,
     )
 
     with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
-        provider_obj = Provider.objects.get(id=provider_id)
+        scan_obj = Scan.objects.get(id=scan_id)
+        prov_id = provider_id or str(scan_obj.provider_id)
+        provider_obj = Provider.objects.get(id=prov_id)
         provider_uid = provider_obj.uid
         provider_type = provider_obj.provider
+
 
     vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid)
     exec_path = f"{vrika_dir}_executive_report.pdf"
