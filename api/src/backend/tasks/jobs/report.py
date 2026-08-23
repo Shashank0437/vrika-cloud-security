@@ -1510,6 +1510,7 @@ def _notify_vrika_scan_completed(
     import base64
     import os
     import json
+    import urllib.error
     import urllib.request
     from django.conf import settings
     from django.db.models import Sum
@@ -1572,7 +1573,14 @@ def _notify_vrika_scan_completed(
     }
 
     vrika_secret = getattr(settings, "VRIKA_BRIDGE_SECRET", "") or getattr(settings, "PROWLER_BRIDGE_SECRET", "") or "vrika-cloud-bridge-shared-secret"
-    vrika_api_url = "http://api:8000/internal/notify-scan-completed"
+    # "api" is ambiguous on the shared Docker network: both vrika-server and
+    # Prowler's own API answer to it, so the bare name resolves at random.
+    # Always address vrika-server explicitly.
+    vrika_base = (
+        os.environ.get("VRIKA_SERVER_INTERNAL_URL", "").strip().rstrip("/")
+        or "http://vrika-server-api:8000"
+    )
+    vrika_api_url = f"{vrika_base}/internal/notify-scan-completed"
 
     try:
         req = urllib.request.Request(
@@ -1586,8 +1594,26 @@ def _notify_vrika_scan_completed(
         )
         with urllib.request.urlopen(req, timeout=20) as resp:
             logger.info("Triggered Vrika scan completion notification (Dual PDFs): HTTP %s", resp.getcode())
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", "replace")[:500]
+        except Exception:  # noqa: BLE001 - diagnostics only
+            pass
+        logger.error(
+            "Vrika scan completion notification rejected (scan=%s): HTTP %s %s",
+            scan_id,
+            exc.code,
+            body,
+        )
     except Exception as exc:
-        logger.warning("Failed to trigger Vrika scan completion notification: %s", exc)
+        # Never propagate: a mail problem must not fail the scan.
+        logger.error(
+            "Failed to trigger Vrika scan completion notification (scan=%s, url=%s): %s",
+            scan_id,
+            vrika_api_url,
+            exc,
+        )
 
 
 def share_vrika_scan_email_job(

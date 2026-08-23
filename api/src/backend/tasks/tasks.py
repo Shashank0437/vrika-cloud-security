@@ -435,6 +435,31 @@ def _perform_scan_complete_tasks(tenant_id: str, scan_id: str, provider_id: str)
         ),
     ).apply_async()
 
+    # Scheduled runs email their report automatically; manual runs stay opt-in
+    # via the "share by email" action. Read from the scan itself so scheduled
+    # runs that were queued behind another scan are covered too.
+    #
+    # Dispatched standalone, never chained into the pipeline above: PDF
+    # rendering and mail delivery must not be able to fail the scan. The
+    # enqueue is guarded as well, so even a broker hiccup is only logged.
+    try:
+        with rls_transaction(tenant_id):
+            is_scheduled = Scan.objects.filter(
+                pk=scan_id, trigger=Scan.TriggerChoices.SCHEDULED
+            ).exists()
+        if is_scheduled:
+            share_vrika_scan_email_task.apply_async(
+                kwargs={
+                    "tenant_id": tenant_id,
+                    "scan_id": scan_id,
+                    "provider_id": provider_id,
+                }
+            )
+    except Exception as exc:  # noqa: BLE001 - notification is best-effort
+        logger.error(
+            "Could not enqueue scan completion email (scan=%s): %s", scan_id, exc
+        )
+
     if can_provider_run_attack_paths_scan(tenant_id, provider_id):
         # Row is normally created upstream, so this is a safeguard so we can attach the task id below
         attack_paths_scan = attack_paths_db_utils.retrieve_attack_paths_scan(
