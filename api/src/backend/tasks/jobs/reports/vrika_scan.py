@@ -586,69 +586,70 @@ class VrikaScanReportGenerator:
                 else Provider.objects.get(id=provider_id)
             )
 
-        stats = _aggregate_scan_stats(tenant_id, scan_id)
-        severity = _severity_breakdown(tenant_id, scan_id)
-        score = _security_score(stats)
-        domains = _load_domain_summaries(tenant_id, scan_id)
-        framework_cards = _load_framework_cards(provider.provider, tenant_id, scan_id)
-        top_risks = _load_top_risks(tenant_id, scan_id)
+            stats = _aggregate_scan_stats(tenant_id, scan_id)
+            severity = _severity_breakdown(tenant_id, scan_id)
+            score = _security_score(stats)
+            domains = _load_domain_summaries(tenant_id, scan_id)
+            framework_cards = _load_framework_cards(provider.provider, tenant_id, scan_id)
+            top_risks = _load_top_risks(tenant_id, scan_id)
 
-        evaluated = stats["passed"] + stats["failed"]
-        fail_pct = (stats["failed"] / evaluated * 100) if evaluated else 0.0
-        narrative_ctx = ScanNarrativeContext(
-            provider_label=provider.provider.upper(),
-            score=score,
-            passed=stats["passed"],
-            failed=stats["failed"],
-            muted=stats["muted"],
-            total=stats["total"],
-            fail_pct=fail_pct,
-            critical_count=severity.get("critical", 0),
-            high_count=severity.get("high", 0),
-            top_domains=[(d.category, d.failed) for d in domains[:5]],
-        )
+            evaluated = stats["passed"] + stats["failed"]
+            fail_pct = (stats["failed"] / evaluated * 100) if evaluated else 0.0
+            narrative_ctx = ScanNarrativeContext(
+                provider_label=provider.provider.upper(),
+                score=score,
+                passed=stats["passed"],
+                failed=stats["failed"],
+                muted=stats["muted"],
+                total=stats["total"],
+                fail_pct=fail_pct,
+                critical_count=severity.get("critical", 0),
+                high_count=severity.get("high", 0),
+                top_domains=[(d.category, d.failed) for d in domains[:5]],
+            )
 
-        parent_dir = os.path.dirname(output_path)
-        if parent_dir and not os.path.isdir(parent_dir):
-            os.makedirs(parent_dir, exist_ok=True)
+            parent_dir = os.path.dirname(output_path)
+            if parent_dir and not os.path.isdir(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
 
-        doc = SimpleDocTemplate(
-            output_path,
-            pagesize=A4,
-            title="Vrika Security Report",
-            author=self.theme.pdf_author,
-            creator=self.theme.pdf_creator,
-            leftMargin=0.75 * inch,
-            rightMargin=0.75 * inch,
-            topMargin=0.75 * inch,
-            bottomMargin=0.75 * inch,
-        )
+            doc = SimpleDocTemplate(
+                output_path,
+                pagesize=A4,
+                title="Vrika Security Report",
+                author=self.theme.pdf_author,
+                creator=self.theme.pdf_creator,
+                leftMargin=0.75 * inch,
+                rightMargin=0.75 * inch,
+                topMargin=0.75 * inch,
+                bottomMargin=0.75 * inch,
+            )
 
-        elements: list[Any] = []
-        elements.extend(self._page_header(scan, provider))
-        elements.extend(self._executive_summary(narrative_ctx))
-        elements.extend(self._key_observations(narrative_ctx))
-        elements.extend(self._account_overview(scan, provider))
-        elements.extend(self._controls_overview(stats, score, severity))
-        elements.append(PageBreak())
-        elements.extend(self._security_domains(domains))
-        if framework_cards:
+            elements: list[Any] = []
+            elements.extend(self._page_header(scan, provider))
+            elements.extend(self._executive_summary(narrative_ctx))
+            elements.extend(self._key_observations(narrative_ctx))
+            elements.extend(self._account_overview(scan, provider))
+            elements.extend(self._controls_overview(stats, score, severity))
             elements.append(PageBreak())
-            elements.extend(self._compliance_overview(framework_cards))
-        if top_risks:
-            elements.append(PageBreak())
-            elements.extend(self._top_risks(top_risks))
-        elements.extend(self._recommended_next_steps(narrative_ctx))
+            elements.extend(self._security_domains(domains))
+            if framework_cards:
+                elements.append(PageBreak())
+                elements.extend(self._compliance_overview(framework_cards))
+            if top_risks:
+                elements.append(PageBreak())
+                elements.extend(self._top_risks(top_risks))
+            elements.extend(self._recommended_next_steps(narrative_ctx))
 
-        if self.include_all_findings and domains:
-            elements.append(PageBreak())
-            elements.extend(self._appendix_by_domain(tenant_id, scan_id, domains))
+            if self.include_all_findings and domains:
+                elements.append(PageBreak())
+                elements.extend(self._appendix_by_domain(tenant_id, scan_id, domains))
 
-        doc.build(
-            elements,
-            onFirstPage=self._footer,
-            onLaterPages=self._footer,
-        )
+            doc.build(
+                elements,
+                onFirstPage=self._footer,
+                onLaterPages=self._footer,
+            )
+
 
     def _footer(self, canvas, doc) -> None:
         canvas.saveState()
