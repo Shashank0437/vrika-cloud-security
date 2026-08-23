@@ -2849,6 +2849,8 @@ class ScanViewSet(BaseRLSViewSet):
         tenant_id = str(self.request.tenant_id)
         scan_id = str(scan.id)
         provider_id = str(scan.provider_id)
+        provider_uid = str(getattr(scan.provider, "uid", "") or "")
+        provider_type = str(getattr(scan.provider, "provider", "aws") or "aws")
 
         import threading
         from tasks.jobs.report import share_vrika_scan_email_job
@@ -2859,6 +2861,8 @@ class ScanViewSet(BaseRLSViewSet):
                     tenant_id=tenant_id,
                     scan_id=scan_id,
                     provider_id=provider_id,
+                    provider_uid=provider_uid,
+                    provider_type=provider_type,
                 )
             except Exception as exc:
                 logger.warning("Failed to dispatch share email in background thread: %s", exc)
@@ -2879,6 +2883,7 @@ class ScanViewSet(BaseRLSViewSet):
     )
     def vrika_report_share_email(self, request, pk=None):
         return self.share_email(request, pk=pk)
+
 
 
 
