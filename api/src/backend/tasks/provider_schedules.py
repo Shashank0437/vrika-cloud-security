@@ -146,6 +146,18 @@ def compute_next_scan_at(periodic_task: PeriodicTask | None) -> datetime | None:
     if periodic_task is None or not periodic_task.enabled:
         return None
 
+    now = datetime.now(UTC)
+    if periodic_task.interval:
+        interval = periodic_task.interval
+        if periodic_task.last_run_at is None and periodic_task.start_time:
+            next_at = periodic_task.start_time
+        else:
+            baseline = periodic_task.last_run_at or periodic_task.date_changed or now
+            next_at = baseline + timedelta(**{interval.period: interval.every})
+        if periodic_task.start_time:
+            next_at = max(next_at, periodic_task.start_time)
+        return max(now, next_at)
+
     # Prefer wall-clock math from stored schedule metadata (timezone-correct).
     stored = _schedule_metadata(periodic_task)
     if isinstance(stored, dict) and stored.get("scan_hour") is not None:
@@ -170,7 +182,6 @@ def compute_next_scan_at(periodic_task: PeriodicTask | None) -> datetime | None:
         )
         return None
 
-    now = datetime.now(UTC)
     last = periodic_task.last_run_at or now
     try:
         remaining = schedule.remaining_estimate(last)
@@ -464,6 +475,11 @@ def upsert_provider_schedule(
     beat = _build_beat_schedule(attrs)
 
     periodic_task = get_scheduled_periodic_task(provider_id)
+    reset_schedule_clock = (
+        periodic_task is None
+        or periodic_task.last_run_at is None
+        or _schedule_metadata(periodic_task) != attrs
+    )
     existing_kwargs = _parse_periodic_kwargs(periodic_task) if periodic_task else {}
     existing_headers = _parse_periodic_headers(periodic_task) if periodic_task else {}
     # Legacy rows stored schedule inside kwargs — drop it from task kwargs.
@@ -491,7 +507,23 @@ def upsert_provider_schedule(
     periodic_task.enabled = attrs["scan_enabled"]
     periodic_task.kwargs = json.dumps(periodic_kwargs)
     periodic_task.headers = json.dumps(periodic_headers)
-    periodic_task.start_time = datetime.now(UTC)
+    # Beat backdates an unset last_run_at by 30 years when start_time is set,
+    # making a newly saved schedule immediately overdue. Initialize its clock
+    # instead; this is scheduling state, not the last completed scan timestamp.
+    periodic_task.start_time = None
+    if reset_schedule_clock:
+        now = datetime.now(UTC)
+        periodic_task.last_run_at = now
+        if periodic_task.interval:
+            first_run = next_run_from_schedule_attrs(
+                {**attrs, "scan_enabled": True, "scan_frequency": FREQUENCY_DAILY},
+                now=now,
+            )
+            if first_run is None:
+                raise ValueError("Cannot determine the first interval scan time.")
+            periodic_task.last_run_at = first_run - timedelta(
+                hours=attrs["scan_interval_hours"]
+            )
     periodic_task.save()
 
     next_scan_at = (

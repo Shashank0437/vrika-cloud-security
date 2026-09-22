@@ -2,6 +2,21 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## Schedule first-run timing
+
+Saving an advanced schedule does not launch a scan. Daily, weekly and monthly
+schedules first run at the next selected time in the configured timezone.
+Interval schedules first run at the next selected scan hour, then repeat at the
+configured interval. If that time has already passed, the first run waits for the
+next occurrence; it is not treated as a missed run to execute immediately.
+
+Changing the cadence or re-enabling a disabled schedule starts a new scheduling
+baseline. Saving an unchanged schedule preserves its cadence. The optional
+**Launch an initial scan now** action remains separate and does not move the
+next scheduled run. Beat's `last_run_at` is initialized as a scheduling baseline;
+the displayed last completed scan continues to come from actual scan records.
+Existing schedules and completed scans are not rewritten during deployment.
+
 ## Scheduled scan report emails
 
 Scheduled scans send report emails only after scan summaries, output processing
