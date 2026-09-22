@@ -423,9 +423,13 @@ def _perform_scan_complete_tasks(tenant_id: str, scan_id: str, provider_id: str)
             ),
         ),
         group(
-            # Use optimized task that generates both reports with shared queries
-            generate_compliance_reports_task.si(
-                tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id
+            chain(
+                generate_compliance_reports_task.si(
+                    tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id
+                ),
+                send_scheduled_scan_report_task.s(
+                    tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id
+                ),
             ),
             check_integrations_task.si(
                 tenant_id=tenant_id,
@@ -434,31 +438,6 @@ def _perform_scan_complete_tasks(tenant_id: str, scan_id: str, provider_id: str)
             ),
         ),
     ).apply_async()
-
-    # Scheduled runs email their report automatically; manual runs stay opt-in
-    # via the "share by email" action. Read from the scan itself so scheduled
-    # runs that were queued behind another scan are covered too.
-    #
-    # Dispatched standalone, never chained into the pipeline above: PDF
-    # rendering and mail delivery must not be able to fail the scan. The
-    # enqueue is guarded as well, so even a broker hiccup is only logged.
-    try:
-        with rls_transaction(tenant_id):
-            is_scheduled = Scan.objects.filter(
-                pk=scan_id, trigger=Scan.TriggerChoices.SCHEDULED
-            ).exists()
-        if is_scheduled:
-            share_vrika_scan_email_task.apply_async(
-                kwargs={
-                    "tenant_id": tenant_id,
-                    "scan_id": scan_id,
-                    "provider_id": provider_id,
-                }
-            )
-    except Exception as exc:  # noqa: BLE001 - notification is best-effort
-        logger.error(
-            "Could not enqueue scan completion email (scan=%s): %s", scan_id, exc
-        )
 
     if can_provider_run_attack_paths_scan(tenant_id, provider_id):
         # Row is normally created upstream, so this is a safeguard so we can attach the task id below
@@ -1587,6 +1566,47 @@ def generate_vrika_full_pdf_task(tenant_id: str, scan_id: str, provider_id: str)
         scan_id=scan_id,
         provider_id=provider_id,
         variant="full",
+    )
+
+
+@shared_task(
+    base=RLSTask,
+    name="scan-scheduled-report-email",
+    queue="scan-reports",
+    acks_late=False,
+)
+@handle_provider_deletion
+def send_scheduled_scan_report_task(
+    report_results: dict[str, dict[str, bool | str]],
+    tenant_id: str,
+    scan_id: str,
+    provider_id: str,
+):
+    """Email scheduled scans only after the report pipeline has succeeded."""
+    from tasks.jobs.report import share_vrika_scan_email_job
+
+    with rls_transaction(tenant_id):
+        is_scheduled = Scan.objects.filter(
+            pk=scan_id, trigger=Scan.TriggerChoices.SCHEDULED
+        ).exists()
+    if not is_scheduled:
+        return {"status": "skipped", "reason": "Manual scans require explicit sharing"}
+
+    # Report jobs can return errors rather than raising; a successful Celery
+    # result alone does not mean the PDFs were generated successfully.
+    failed_reports = [
+        name for name, result in report_results.items() if result.get("error")
+    ]
+    if not report_results.get("vrika_executive", {}).get("path"):
+        failed_reports.append("vrika_executive")
+    if failed_reports:
+        raise RuntimeError(
+            f"Cannot email scan {scan_id}: reports not ready: "
+            f"{', '.join(sorted(set(failed_reports)))}"
+        )
+
+    return share_vrika_scan_email_job(
+        tenant_id=tenant_id, scan_id=scan_id, provider_id=provider_id
     )
 
 

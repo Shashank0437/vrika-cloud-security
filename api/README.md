@@ -2,6 +2,24 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## Scheduled scan report emails
+
+Scheduled scans send report emails only after scan summaries, output processing
+and report generation finish. The scheduled email task is a continuation of the
+report task, not an independent task launched when scanning ends. Report results
+containing errors, or a missing executive report result, block the email.
+Integrations and Attack Paths remain independent of email delivery.
+
+Both the executive and full PDF must be readable and have PDF header/end markers
+before the notification is submitted. Missing full reports are generated before
+sending; generation, file-reading and notification errors fail the email task
+rather than silently sending a fallback report. This does not change the completed
+scan's status. `accepted` means the Vrika mail service accepted the notification,
+not that SMTP delivery has been confirmed. Delivery is not automatically retried.
+
+Manual scans remain opt-in through **Share by email**, with the same attachment
+checks. Existing emailed PDFs are not replaced or resent by this change.
+
 ## Attack Paths: AWS, GCP and Azure
 
 New scans automatically schedule Attack Paths for AWS, GCP and Azure. Existing

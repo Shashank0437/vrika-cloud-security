@@ -1497,6 +1497,15 @@ def generate_vrika_full_pdf_job(
     )
 
 
+def _encode_email_pdf(path: str) -> str:
+    import base64
+
+    content = Path(path).read_bytes()
+    if not content.startswith(b"%PDF-") or not content.rstrip().endswith(b"%%EOF"):
+        raise ValueError(f"Cannot email incomplete PDF: {path}")
+    return base64.b64encode(content).decode("ascii")
+
+
 def _notify_vrika_scan_completed(
     tenant_id: str,
     scan_id: str,
@@ -1507,30 +1516,17 @@ def _notify_vrika_scan_completed(
     full_pdf_path: str = "",
 ) -> None:
     """Send scan completion notification with executive and full PDFs to Vrika Server."""
-    import base64
-    import os
     import json
+    import os
     import urllib.error
     import urllib.request
+
+    from api.models import ScanSummary
     from django.conf import settings
     from django.db.models import Sum
-    from api.models import ScanSummary
 
-    exec_b64 = ""
-    if executive_pdf_path and os.path.exists(executive_pdf_path):
-        try:
-            with open(executive_pdf_path, "rb") as f:
-                exec_b64 = base64.b64encode(f.read()).decode("utf-8")
-        except Exception as e:
-            logger.warning("Failed to encode executive PDF for email: %s", e)
-
-    full_b64 = ""
-    if full_pdf_path and os.path.exists(full_pdf_path):
-        try:
-            with open(full_pdf_path, "rb") as f:
-                full_b64 = base64.b64encode(f.read()).decode("utf-8")
-        except Exception as e:
-            logger.warning("Failed to encode full PDF for email: %s", e)
+    exec_b64 = _encode_email_pdf(executive_pdf_path)
+    full_b64 = _encode_email_pdf(full_pdf_path)
 
     score = 100
     total = 0
@@ -1546,7 +1542,7 @@ def _notify_vrika_scan_completed(
             failed = int(totals.get("failed") or 0)
             total = int(totals.get("total") or 0)
             evaluated = passed + failed
-            score = int((passed / evaluated * 100)) if evaluated > 0 else 100
+            score = int(passed / evaluated * 100) if evaluated > 0 else 100
 
             sev_rows = (
                 ScanSummary.objects.filter(tenant_id=tenant_id, scan_id=scan_id)
@@ -1558,7 +1554,8 @@ def _notify_vrika_scan_completed(
                 if s_name in findings_breakdown:
                     findings_breakdown[s_name] = int(row["failed"] or 0)
     except Exception as db_err:
-        logger.warning("Error fetching scan stats for email: %s", db_err)
+        logger.exception("Error fetching scan stats for email: %s", db_err)
+        raise
 
     payload = {
         "prowler_tenant_id": str(tenant_id),
@@ -1593,6 +1590,9 @@ def _notify_vrika_scan_completed(
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read())
+            if resp.getcode() != 202 or result.get("status") != "accepted":
+                raise RuntimeError("Vrika server did not accept the report email")
             logger.info("Triggered Vrika scan completion notification (Dual PDFs): HTTP %s", resp.getcode())
     except urllib.error.HTTPError as exc:
         body = ""
@@ -1606,14 +1606,15 @@ def _notify_vrika_scan_completed(
             exc.code,
             body,
         )
+        raise
     except Exception as exc:
-        # Never propagate: a mail problem must not fail the scan.
         logger.error(
             "Failed to trigger Vrika scan completion notification (scan=%s, url=%s): %s",
             scan_id,
             vrika_api_url,
             exc,
         )
+        raise
 
 
 def share_vrika_scan_email_job(
@@ -1625,62 +1626,50 @@ def share_vrika_scan_email_job(
 ) -> dict[str, bool | str]:
     """On-demand task to generate PDFs (if not already cached) and dispatch share email."""
     import os
+
     from tasks.jobs.reports.vrika_scan import (
         generate_vrika_executive_report,
         generate_vrika_full_report,
     )
 
     if not provider_uid:
-        try:
-            with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
-                from api.models import Provider, Scan
-                scan_obj = Scan.objects.get(id=scan_id)
-                prov_id = provider_id or str(scan_obj.provider_id)
-                provider_obj = Provider.objects.get(id=prov_id)
-                provider_uid = provider_obj.uid
-                provider_type = provider_obj.provider
-        except Exception:
-            pass
+        with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
+            from api.models import Provider, Scan
 
-    vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid or "aws")
+            scan_obj = Scan.objects.get(id=scan_id)
+            provider_id = provider_id or str(scan_obj.provider_id)
+            provider_obj = Provider.objects.get(id=provider_id)
+            provider_uid = provider_obj.uid
+            provider_type = provider_obj.provider
+
+    vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid)
     exec_path = f"{vrika_dir}_executive_report.pdf"
     full_path = f"{vrika_dir}_full_report.pdf"
 
-
     if not os.path.exists(exec_path):
-        try:
-            generate_vrika_executive_report(
-                tenant_id=tenant_id,
-                scan_id=scan_id,
-                provider_id=provider_id,
-                output_path=exec_path,
-            )
-        except Exception as e:
-            logger.warning("Could not generate exec PDF for share email: %s", e)
-
-    if not os.path.exists(full_path):
-        try:
-            generate_vrika_full_report(
-                tenant_id=tenant_id,
-                scan_id=scan_id,
-                provider_id=provider_id,
-                output_path=full_path,
-            )
-        except Exception as e:
-            logger.warning("Could not generate full PDF for share email: %s", e)
-
-    try:
-        _notify_vrika_scan_completed(
+        generate_vrika_executive_report(
             tenant_id=tenant_id,
             scan_id=scan_id,
             provider_id=provider_id,
-            provider_type=provider_type,
-            provider_uid=provider_uid,
-            executive_pdf_path=exec_path if os.path.exists(exec_path) else "",
-            full_pdf_path=full_path if os.path.exists(full_path) else "",
+            output_path=exec_path,
         )
-    except Exception as e_notif:
-        logger.warning("Could not send scan email notification: %s", e_notif)
 
-    return {"status": "sent"}
+    if not os.path.exists(full_path):
+        generate_vrika_full_report(
+            tenant_id=tenant_id,
+            scan_id=scan_id,
+            provider_id=provider_id,
+            output_path=full_path,
+        )
 
+    _notify_vrika_scan_completed(
+        tenant_id=tenant_id,
+        scan_id=scan_id,
+        provider_id=provider_id,
+        provider_type=provider_type,
+        provider_uid=provider_uid,
+        executive_pdf_path=exec_path,
+        full_pdf_path=full_path,
+    )
+
+    return {"status": "accepted"}
