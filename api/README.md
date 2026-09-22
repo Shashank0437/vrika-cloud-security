@@ -2,6 +2,21 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## Executive and full PDF layout
+
+Scan reports use a compact overview with score/resource/priority metrics,
+page-width-aware tables, vector severity/outcome charts and two-column compliance
+cards. Account identifiers and aliases wrap without being shortened, and custom
+tenant logos are retained. Section headings stay with their content and table
+headers repeat across page breaks.
+
+This presentation does not change scoring, finding filters, narrative text or
+report selection limits. Both variants retain the executive summary, observations,
+account metadata, control outcomes, security domains, compliance cards, top risks
+and recommendations. The full variant additionally retains the domain appendix,
+including its existing limit of 25 checks per domain across up to 15 domains.
+The separate compliance-framework PDF generators are unchanged.
+
 ## Schedule first-run timing
 
 Saving an advanced schedule does not launch a scan. Daily, weekly and monthly
