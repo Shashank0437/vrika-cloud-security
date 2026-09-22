@@ -126,6 +126,39 @@ describe("exportGraphAsPNG", () => {
     expect(link?.href).toBe("data:image/png;base64,AAAA");
   });
 
+  it.each([
+    ["AWSAccount", "AWS"],
+    ["GCPProject", "GCP"],
+    ["AzureSubscription", "Azure"],
+    ["AzureTenant", "Azure"],
+    ["KubernetesCluster", "Cloud"],
+  ])(
+    "exports %s roots with the correct provider badge",
+    async (label, badge) => {
+      await exportGraphAsPNG(
+        buildContainerWithViewport(),
+        bounds,
+        "graph.png",
+        { nodes: [{ id: "root", labels: [label], properties: {} }] },
+      );
+
+      const context = vi.mocked(HTMLCanvasElement.prototype.getContext).mock
+        .results[0]?.value as CanvasRenderingContext2D;
+      expect(context.fillText).toHaveBeenCalledWith(
+        badge,
+        expect.any(Number),
+        expect.any(Number),
+      );
+      if (badge !== "AWS") {
+        expect(context.fillText).not.toHaveBeenCalledWith(
+          "AWS",
+          expect.any(Number),
+          expect.any(Number),
+        );
+      }
+    },
+  );
+
   it("renders exported long resource labels with the same wrapping as graph nodes", async () => {
     const container = buildContainerWithViewport();
     const longLabelGraphData: AttackPathGraphData = {

@@ -2,11 +2,15 @@ from api.attack_paths.queries.aws import AWS_QUERIES
 
 # TODO: drop after Neptune cutover
 from api.attack_paths.queries.aws_deprecated import AWS_DEPRECATED_QUERIES
+from api.attack_paths.queries.azure import AZURE_QUERIES
+from api.attack_paths.queries.gcp import GCP_QUERIES
 from api.attack_paths.queries.types import AttackPathsQueryDefinition
 
 # Query definitions for scans synced with the current schema.
 _QUERY_DEFINITIONS: dict[str, list[AttackPathsQueryDefinition]] = {
     "aws": AWS_QUERIES,
+    "gcp": GCP_QUERIES,
+    "azure": AZURE_QUERIES,
 }
 
 _QUERIES_BY_ID: dict[str, AttackPathsQueryDefinition] = {
@@ -24,6 +28,8 @@ _QUERIES_BY_ID: dict[str, AttackPathsQueryDefinition] = {
 # routed to.
 _DEPRECATED_QUERY_DEFINITIONS: dict[str, list[AttackPathsQueryDefinition]] = {
     "aws": AWS_DEPRECATED_QUERIES,
+    "gcp": GCP_QUERIES,
+    "azure": AZURE_QUERIES,
 }
 
 _DEPRECATED_QUERIES_BY_ID: dict[str, AttackPathsQueryDefinition] = {

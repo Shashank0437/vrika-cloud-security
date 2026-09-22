@@ -41,10 +41,12 @@ vi.mock("@/components/shadcn/entities/entity-info", () => ({
   EntityInfo: ({
     entityAlias,
     entityId,
+    cloudProvider,
   }: {
     entityAlias?: string;
     entityId?: string;
-  }) => <div>{entityAlias ?? entityId}</div>,
+    cloudProvider?: string;
+  }) => <div data-provider={cloudProvider}>{entityAlias ?? entityId}</div>,
 }));
 
 vi.mock("@/components/shadcn/entities/date-with-time", () => ({
@@ -162,6 +164,32 @@ describe("ScanListTable", () => {
     );
   });
 
+  it("renders and selects scans from every supported cloud", async () => {
+    const user = userEvent.setup();
+    const scans = (["aws", "gcp", "azure"] as const).map((provider, index) => {
+      const scan = createScan(index + 1);
+      scan.attributes.provider_type = provider;
+      return scan;
+    });
+
+    render(<ScanListTable scans={scans} />);
+
+    for (const [index, scan] of Array.from(scans.entries())) {
+      expect(screen.getByText(scan.attributes.provider_alias)).toHaveAttribute(
+        "data-provider",
+        scan.attributes.provider_type,
+      );
+      const radio = screen.getAllByRole("radio", { name: "Select scan" })[
+        index
+      ];
+      expect(radio).toBeEnabled();
+      await user.click(radio);
+      expect(pushMock).toHaveBeenLastCalledWith(
+        `/attack-paths?scanPage=1&scanPageSize=5&scanId=${scan.id}`,
+      );
+    }
+  });
+
   it("uses the shared data table chrome and preserves query params when selecting a scan", async () => {
     const user = userEvent.setup();
 
@@ -211,6 +239,14 @@ describe("ScanListTable", () => {
     const radio = screen.getByRole("radio", { name: "Select scan" });
     expect(radio).toBeEnabled();
     expect(radio).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByLabelText("Graph available but may be incomplete"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This scan failed after producing graph data. Results may be incomplete.",
+      ),
+    ).toBeInTheDocument();
 
     await user.click(radio);
 

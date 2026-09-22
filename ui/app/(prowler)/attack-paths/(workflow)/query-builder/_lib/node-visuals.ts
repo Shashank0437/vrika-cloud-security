@@ -68,6 +68,7 @@ interface KnownNodeVisualMapping {
   category: NodeCategory;
   description: string;
   Icon: ElementType;
+  exportBadge?: string;
 }
 
 export interface NodeVisual extends KnownNodeVisualMapping {
@@ -80,31 +81,103 @@ const KNOWN_NODE_VISUALS = {
     category: NODE_CATEGORY.ACCOUNT,
     description: "AWS Account",
     Icon: AWSProviderBadge,
+    exportBadge: "AWS",
   },
   azureaccount: {
     category: NODE_CATEGORY.ACCOUNT,
     description: "Azure Account",
     Icon: AzureProviderBadge,
+    exportBadge: "Azure",
   },
   azuretenant: {
     category: NODE_CATEGORY.ACCOUNT,
     description: "Azure Tenant",
     Icon: AzureProviderBadge,
+    exportBadge: "Azure",
+  },
+  azuresubscription: {
+    category: NODE_CATEGORY.ACCOUNT,
+    description: "Azure Subscription",
+    Icon: AzureProviderBadge,
+    exportBadge: "Azure",
   },
   gcpaccount: {
     category: NODE_CATEGORY.ACCOUNT,
     description: "Google Cloud Account",
     Icon: GCPProviderBadge,
+    exportBadge: "GCP",
   },
   gcpproject: {
     category: NODE_CATEGORY.ACCOUNT,
     description: "Google Cloud Project",
     Icon: GCPProviderBadge,
+    exportBadge: "GCP",
   },
   googlecloudaccount: {
     category: NODE_CATEGORY.ACCOUNT,
     description: "Google Cloud Account",
     Icon: GCPProviderBadge,
+    exportBadge: "GCP",
+  },
+  gcpinstance: {
+    category: NODE_CATEGORY.COMPUTE,
+    description: "GCP Instance",
+    Icon: Server,
+  },
+  gcpbucket: {
+    category: NODE_CATEGORY.STORAGE,
+    description: "GCP Bucket",
+    Icon: GCPProviderBadge,
+  },
+  gcpserviceaccount: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "GCP Service Account",
+    Icon: Bot,
+  },
+  gcpprincipal: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "GCP Principal",
+    Icon: Users,
+  },
+  gcppolicybinding: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "GCP Policy Binding",
+    Icon: FileKey2,
+  },
+  azurevm: {
+    category: NODE_CATEGORY.COMPUTE,
+    description: "Azure Virtual Machine",
+    Icon: Server,
+  },
+  azurevirtualmachine: {
+    category: NODE_CATEGORY.COMPUTE,
+    description: "Azure Virtual Machine",
+    Icon: Server,
+  },
+  azurestorageaccount: {
+    category: NODE_CATEGORY.STORAGE,
+    description: "Azure Storage Account",
+    Icon: AzureProviderBadge,
+  },
+  azureserviceprincipal: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "Azure Service Principal",
+    Icon: Bot,
+  },
+  azureprincipal: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "Azure Principal",
+    Icon: Users,
+  },
+  azureroleassignment: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "Azure Role Assignment",
+    Icon: UserCog,
+  },
+  azureroledefinition: {
+    category: NODE_CATEGORY.IDENTITY,
+    description: "Azure Role Definition",
+    Icon: ShieldCheck,
   },
   kubernetescluster: {
     category: NODE_CATEGORY.ACCOUNT,

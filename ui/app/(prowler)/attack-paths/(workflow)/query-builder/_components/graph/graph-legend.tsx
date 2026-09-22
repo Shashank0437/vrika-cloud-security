@@ -115,14 +115,6 @@ const buildVisualItem = (
   glow,
 });
 
-const providerRootItem = buildVisualItem(
-  "Provider",
-  "Cloud account, tenant, project, organization, or cluster entry point.",
-  buildNode(["AWSAccount"], { name: "Provider root" }),
-  GRAPH_NODE_COLORS.awsAccount,
-  GRAPH_NODE_BORDER_COLORS.awsAccount,
-);
-
 const findingRiskItems: LegendVisualItem[] = [
   buildVisualItem(
     "Critical",
@@ -480,11 +472,22 @@ export const GraphLegend = ({
     expandedResources,
     isFilteredView,
   );
-  const providerItem = legendState.visibleNodes.some(
-    (node) => resolveNodeVisual(node).category === NODE_CATEGORY.ACCOUNT,
-  )
-    ? providerRootItem
-    : null;
+  const providerItems = new Map<string, LegendVisualItem>();
+  for (const node of legendState.visibleNodes) {
+    const visual = resolveNodeVisual(node);
+    if (visual.category === NODE_CATEGORY.ACCOUNT) {
+      providerItems.set(
+        visual.description,
+        buildVisualItem(
+          visual.description,
+          `${visual.description} entry point.`,
+          node,
+          getNodeColor(node.labels, node.properties),
+          getNodeBorderColor(node.labels, node.properties),
+        ),
+      );
+    }
+  }
   const visibleNodeTypeItems = resolveNodeTypeItems(legendState.visibleNodes);
   const visibleFindingRiskItems = resolveFindingRiskItems(
     legendState.visibleNodes,
@@ -509,7 +512,7 @@ export const GraphLegend = ({
   });
 
   if (
-    !providerItem &&
+    providerItems.size === 0 &&
     visibleNodeTypeItems.length === 0 &&
     visibleFindingRiskItems.length === 0 &&
     visibleStateItems.length === 0 &&
@@ -526,11 +529,13 @@ export const GraphLegend = ({
       <CardContent className="p-3">
         <TooltipProvider>
           <div className="flex w-full flex-wrap items-stretch gap-2">
-            {providerItem && (
+            {providerItems.size > 0 && (
               <LegendSection title="Provider roots">
-                <LegendItem {...providerItem}>
-                  <BadgePreview {...providerItem} />
-                </LegendItem>
+                {Array.from(providerItems.values()).map((item) => (
+                  <LegendItem key={item.label} {...item}>
+                    <BadgePreview {...item} />
+                  </LegendItem>
+                ))}
               </LegendSection>
             )}
 

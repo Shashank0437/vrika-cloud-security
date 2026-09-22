@@ -4,6 +4,7 @@ from cartography.intel import create_indexes as cartography_create_indexes
 from celery.utils.log import get_task_logger
 from tasks.jobs.attack_paths.config import (
     INTERNET_NODE_LABEL,
+    PROVIDER_CONFIGS,
     PROVIDER_ELEMENT_ID_PROPERTY,
     PROVIDER_RESOURCE_LABEL,
     PROWLER_FINDING_LABEL,
@@ -17,6 +18,13 @@ FINDINGS_INDEX_STATEMENTS = [
     # Resource indexes for Prowler Finding lookups
     "CREATE INDEX aws_resource_arn IF NOT EXISTS FOR (n:_AWSResource) ON (n.arn);",
     "CREATE INDEX aws_resource_id IF NOT EXISTS FOR (n:_AWSResource) ON (n.id);",
+    *[
+        f"CREATE INDEX {provider}_resource_{field} IF NOT EXISTS "
+        f"FOR (n:{config.resource_label}) ON (n.{field});"
+        for provider, config in PROVIDER_CONFIGS.items()
+        if provider != "aws"
+        for field in ("id", config.uid_field)
+    ],
     # Prowler Finding indexes
     f"CREATE INDEX prowler_finding_id IF NOT EXISTS FOR (n:{PROWLER_FINDING_LABEL}) ON (n.id);",
     f"CREATE INDEX prowler_finding_status IF NOT EXISTS FOR (n:{PROWLER_FINDING_LABEL}) ON (n.status);",

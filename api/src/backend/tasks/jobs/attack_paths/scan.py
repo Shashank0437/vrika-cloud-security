@@ -14,7 +14,7 @@ Pipeline steps:
 
 1. Resolve the Prowler provider and SDK credentials from the scan ID.
    Retrieve or create the AttackPathsScan row. Exit early if the provider
-   type has no ingestion function (only AWS is supported today).
+   type has no ingestion function (AWS, GCP and Azure are supported).
 
 2. Create a fresh temporary Neo4j database and set up Cartography indexes
    plus ProwlerFinding indexes before writing any data.
@@ -233,20 +233,20 @@ def run(tenant_id: str, scan_id: str, task_id: str) -> dict[str, Any]:
 
             # Post-processing: Just keeping it to be more Cartography compliant
             logger.info(
-                f"Syncing Cartography ontology for AWS account {prowler_api_provider.uid}"
+                f"Syncing Cartography ontology for {prowler_api_provider.provider} provider {prowler_api_provider.uid}"
             )
             cartography_ontology.run(tmp_neo4j_session, tmp_cartography_config)
             db_utils.update_attack_paths_scan_progress(attack_paths_scan, 94)
 
             logger.info(
-                f"Syncing Cartography analysis for AWS account {prowler_api_provider.uid}"
+                f"Syncing Cartography analysis for {prowler_api_provider.provider} provider {prowler_api_provider.uid}"
             )
             cartography_analysis.run(tmp_neo4j_session, tmp_cartography_config)
             db_utils.update_attack_paths_scan_progress(attack_paths_scan, 95)
 
             # Creating Internet node and `CAN_ACCESS` relationships
             logger.info(
-                f"Creating Internet graph for AWS account {prowler_api_provider.uid}"
+                f"Creating Internet graph for {prowler_api_provider.provider} provider {prowler_api_provider.uid}"
             )
             internet.analysis(
                 tmp_neo4j_session, prowler_api_provider, tmp_cartography_config
@@ -255,7 +255,7 @@ def run(tenant_id: str, scan_id: str, task_id: str) -> dict[str, Any]:
 
             # Adding Prowler Finding nodes and relationships
             logger.info(
-                f"Syncing Prowler analysis for AWS account {prowler_api_provider.uid}"
+                f"Syncing Prowler analysis for {prowler_api_provider.provider} provider {prowler_api_provider.uid}"
             )
             t0 = time.perf_counter()
             labeled_nodes, findings_loaded = findings.analysis(

@@ -19,7 +19,8 @@ export const WorkflowAttackPaths = () => {
   const steps = [
     {
       title: "Select Attack Paths Scan",
-      description: "Choose an AWS account and its latest Attack Paths scan",
+      description:
+        "Choose an AWS account, GCP project, or Azure subscription and its latest Attack Paths scan",
     },
     {
       title: "Build Query & Visualize",

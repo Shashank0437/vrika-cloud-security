@@ -30,6 +30,38 @@ describe("executeQuery", () => {
     getAuthHeadersMock.mockResolvedValue({ Authorization: "Bearer token" });
   });
 
+  it.each(["aws", "gcp", "azure"])(
+    "passes a %s query ID and parameters to the selected scan unchanged",
+    async (provider) => {
+      fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+      handleApiResponseMock.mockResolvedValue({
+        data: { attributes: { nodes: [], relationships: [] } },
+      });
+
+      await executeQuery(
+        "550e8400-e29b-41d4-a716-446655440000",
+        `${provider}-query`,
+        { resource_id: "resource-1" },
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://api.example.com/api/v1/attack-paths-scans/550e8400-e29b-41d4-a716-446655440000/queries/run",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            data: {
+              type: "attack-paths-query-run-requests",
+              attributes: {
+                id: `${provider}-query`,
+                parameters: { resource_id: "resource-1" },
+              },
+            },
+          }),
+        }),
+      );
+    },
+  );
+
   it("returns a friendly message when API response handling throws", async () => {
     // Given
     fetchMock.mockResolvedValue(

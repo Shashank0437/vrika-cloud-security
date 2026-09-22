@@ -30,7 +30,9 @@ from tasks.jobs.attack_paths.config import (
 )
 from tasks.jobs.attack_paths.queries import (
     ADD_RESOURCE_LABEL_TEMPLATE,
+    ADD_SCOPED_RESOURCE_LABEL_TEMPLATE,
     INSERT_FINDING_TEMPLATE,
+    INSERT_SCOPED_FINDING_TEMPLATE,
     render_cypher_template,
 )
 
@@ -118,7 +120,9 @@ def add_resource_label(
     Returns the total number of nodes labeled.
     """
     query = render_cypher_template(
-        ADD_RESOURCE_LABEL_TEMPLATE,
+        ADD_SCOPED_RESOURCE_LABEL_TEMPLATE
+        if provider_type in ("gcp", "azure")
+        else ADD_RESOURCE_LABEL_TEMPLATE,
         {
             "__ROOT_LABEL__": get_root_node_label(provider_type),
             "__RESOURCE_LABEL__": get_provider_resource_label(provider_type),
@@ -156,7 +160,9 @@ def load_findings(
 ) -> int:
     """Load Prowler findings into the graph, linking them to resources."""
     query = render_cypher_template(
-        INSERT_FINDING_TEMPLATE,
+        INSERT_SCOPED_FINDING_TEMPLATE
+        if prowler_api_provider.provider in ("gcp", "azure")
+        else INSERT_FINDING_TEMPLATE,
         {
             "__NODE_UID_FIELD__": get_node_uid_field(prowler_api_provider.provider),
             "__RESOURCE_LABEL__": get_provider_resource_label(

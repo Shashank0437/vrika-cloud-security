@@ -12,7 +12,7 @@ write the same shape and queries are portable across them.
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from tasks.jobs.attack_paths import aws
+from tasks.jobs.attack_paths import aws, azure, gcp
 
 
 @dataclass(frozen=True)
@@ -428,4 +428,108 @@ AWS_CONFIG = ProviderConfig(
 
 PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     "aws": AWS_CONFIG,
+    "gcp": ProviderConfig(
+        name="gcp",
+        root_node_label="GCPProject",
+        uid_field="_prowler_uid",
+        resource_label="_GCPResource",
+        ingestion_function=gcp.start_gcp_ingestion,
+        short_uid_extractor=gcp.normalize_uid,
+        normalized_lists=[
+            NormalizedList(
+                "GCPInstance",
+                "target_tags",
+                "GCPInstanceTargetTagsItem",
+                "HAS_TARGET_TAGS",
+            ),
+            NormalizedList(
+                "GCPInstance",
+                "service_account_emails",
+                "GCPInstanceServiceAccountEmailsItem",
+                "HAS_SERVICE_ACCOUNT_EMAILS",
+            ),
+            NormalizedList(
+                "GCPInstance",
+                "oauth_scopes",
+                "GCPInstanceOauthScopesItem",
+                "HAS_OAUTH_SCOPES",
+            ),
+            NormalizedList(
+                "GCPInstance",
+                "network_ids",
+                "GCPInstanceNetworkIdsItem",
+                "HAS_NETWORK_IDS",
+            ),
+            NormalizedList(
+                "GCPInstance",
+                "service_account_scopes",
+                "GCPInstanceServiceAccountScopesItem",
+                "HAS_SERVICE_ACCOUNT_SCOPES",
+            ),
+            NormalizedList(
+                "GCPPolicyBinding",
+                "members",
+                "GCPPolicyBindingMembersItem",
+                "HAS_MEMBERS",
+            ),
+            NormalizedList(
+                "GCPPolicyBinding",
+                "wif_pools",
+                "GCPPolicyBindingWifPoolsItem",
+                "HAS_WIF_POOLS",
+            ),
+        ],
+    ),
+    "azure": ProviderConfig(
+        name="azure",
+        root_node_label="AzureSubscription",
+        uid_field="_prowler_uid",
+        resource_label="_AzureResource",
+        ingestion_function=azure.start_azure_ingestion,
+        short_uid_extractor=azure.normalize_uid,
+        normalized_lists=[
+            NormalizedList(
+                "AzureVirtualMachine",
+                "network_interface_ids",
+                "AzureVirtualMachineNetworkInterfaceIdsItem",
+                "HAS_NETWORK_INTERFACE_IDS",
+            ),
+            NormalizedList(
+                "AzureVirtualMachine",
+                "zones",
+                "AzureVirtualMachineZonesItem",
+                "HAS_ZONES",
+            ),
+            NormalizedList(
+                "AzureRoleDefinition",
+                "assignable_scopes",
+                "AzureRoleDefinitionAssignableScopesItem",
+                "HAS_ASSIGNABLE_SCOPES",
+            ),
+            NormalizedList(
+                "AzurePermissions",
+                "actions",
+                "AzurePermissionsActionsItem",
+                "HAS_ACTIONS",
+            ),
+            NormalizedList(
+                "AzurePermissions",
+                "not_actions",
+                "AzurePermissionsNotActionsItem",
+                "HAS_NOT_ACTIONS",
+            ),
+            NormalizedList(
+                "AzurePermissions",
+                "data_actions",
+                "AzurePermissionsDataActionsItem",
+                "HAS_DATA_ACTIONS",
+            ),
+            NormalizedList(
+                "AzurePermissions",
+                "not_data_actions",
+                "AzurePermissionsNotDataActionsItem",
+                "HAS_NOT_DATA_ACTIONS",
+            ),
+        ],
+    ),
 }

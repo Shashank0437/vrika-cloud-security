@@ -35,7 +35,7 @@ class AttackPathsTools(BaseTool):
         ),
         provider_type: list[str] = Field(
             default=[],
-            description="Filter by cloud provider type (aws, azure, gcp, etc.). Use `prowler_hub_list_providers` to see supported provider types",
+            description="Filter by Attack Paths cloud provider type: aws, azure, or gcp. Omit to list scans across supported providers",
         ),
         state: list[
             Literal[
@@ -119,7 +119,10 @@ class AttackPathsTools(BaseTool):
         """Discover available Attack Paths queries for a completed scan.
 
         IMPORTANT: The scan must be in 'completed' state to list queries.
-        Queries are provider-specific
+        Queries are provider-specific for AWS accounts, GCP projects, and Azure
+        subscriptions. Discover queries for the selected scan instead of reusing
+        query IDs from another provider. Available analyses depend on the provider
+        and collected resources.
 
         Each query includes:
         - id: Query identifier to use with run_attack_paths_query
@@ -173,7 +176,7 @@ class AttackPathsTools(BaseTool):
 
         Prerequisites:
         - Scan must be in 'completed' state
-        - query_id must be valid for the scan's provider type
+        - query_id must be valid for the scan's provider type (aws, gcp, or azure)
         - All required parameters must be provided
 
         Returns:
@@ -181,6 +184,7 @@ class AttackPathsTools(BaseTool):
         - relationships: Connections between nodes (CAN_ACCESS, STS_ASSUMEROLE_ALLOW, etc.)
 
         Node types you may see:
+        - AWSAccount, GCPProject, AzureSubscription (provider roots)
         - EC2Instance, S3Bucket, RDSInstance, LoadBalancer, etc. (cloud resources)
         - ProwlerFinding (security issues with severity and status)
         - Internet (virtual node representing external access)

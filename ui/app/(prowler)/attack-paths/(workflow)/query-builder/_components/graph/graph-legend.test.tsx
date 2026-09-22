@@ -55,7 +55,7 @@ describe("GraphLegend", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /edges/i })).toBeInTheDocument();
 
-    expect(screen.getByText("Provider")).toBeInTheDocument();
+    expect(screen.getByText("AWS Account")).toBeInTheDocument();
     expect(screen.getByText("S3 Bucket")).toBeInTheDocument();
     expect(screen.getByText("VPC")).toBeInTheDocument();
     expect(screen.queryByText("Storage")).not.toBeInTheDocument();
@@ -98,6 +98,26 @@ describe("GraphLegend", () => {
     expect(screen.queryByText("Finding edge")).not.toBeInTheDocument();
     expect(screen.getByText("Node with findings")).toBeInTheDocument();
   });
+
+  it.each([
+    ["GCPProject", "Google Cloud Project"],
+    ["AzureSubscription", "Azure Subscription"],
+  ])(
+    "uses the visible %s root instead of an AWS legend",
+    (label, description) => {
+      render(
+        <GraphLegend
+          data={{ nodes: [{ id: "root", labels: [label], properties: {} }] }}
+        />,
+      );
+
+      expect(screen.getByText(description)).toBeInTheDocument();
+      expect(screen.queryByText("AWS Account")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /provider roots/i }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("should keep unattached findings visible in the legend", () => {
     // Given - Findings have no connected resource and stay visible in the full graph

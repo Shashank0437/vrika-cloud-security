@@ -22,6 +22,25 @@ const presetQuery: AttackPathQuery = {
 };
 
 describe("buildAttackPathQueries", () => {
+  it.each(["aws", "gcp", "azure"])(
+    "preserves backend queries for %s alongside the custom query",
+    (provider) => {
+      const query: AttackPathQuery = {
+        ...presetQuery,
+        id: `${provider}-query`,
+        attributes: { ...presetQuery.attributes, provider },
+      };
+
+      const result = buildAttackPathQueries([query]);
+
+      expect(result.map((item) => item.id)).toEqual([
+        ATTACK_PATH_QUERY_IDS.CUSTOM,
+        query.id,
+      ]);
+      expect(result[1]).toEqual(query);
+    },
+  );
+
   it("prepends a custom query that links to the Prowler documentation", () => {
     // When
     const result = buildAttackPathQueries([presetQuery]);

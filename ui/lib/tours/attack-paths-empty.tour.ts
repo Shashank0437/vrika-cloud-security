@@ -17,7 +17,7 @@ export const attackPathsEmptyTour = defineTour({
     {
       title: "Welcome to Attack Paths",
       description:
-        "Attack Paths visualizes how a compromise in one resource could spread through your cloud. It's currently available for AWS accounts only — you'll need a completed AWS scan first.",
+        "Attack Paths visualizes how a compromise in one resource could spread through your cloud. It's available for AWS accounts, GCP projects, and Azure subscriptions — you'll need a scan with graph data ready first.",
     },
     {
       target: "scans-cta",

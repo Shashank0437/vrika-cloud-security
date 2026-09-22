@@ -18,7 +18,7 @@ export const attackPathsTour = defineTour({
     {
       title: "Welcome to Attack Paths",
       description:
-        "Attack Paths visualizes how a compromise in one resource could spread through your cloud. It's currently available for AWS accounts only.",
+        "Attack Paths visualizes how a compromise in one resource could spread through your cloud. It's available for AWS accounts, GCP projects, and Azure subscriptions.",
     },
     {
       target: "intro",
@@ -26,7 +26,7 @@ export const attackPathsTour = defineTour({
       align: TOUR_STEP_ALIGNMENTS.START,
       title: "Start with a scan",
       description:
-        "Attack Paths analyses are generated from your existing AWS scans. Each scan is a point-in-time snapshot of one account.",
+        "Attack Paths analyses are generated from your cloud scans. Each scan is a point-in-time snapshot of one AWS account, GCP project, or Azure subscription.",
     },
     {
       target: "scan-list",
@@ -42,7 +42,7 @@ export const attackPathsTour = defineTour({
       align: TOUR_STEP_ALIGNMENTS.START,
       title: "Choose a query",
       description:
-        "Predefined queries cover common risk patterns (privilege escalation, public exposure, lateral movement). You can also write your own query.",
+        "Predefined queries cover risk patterns for the selected cloud provider. Available queries depend on the provider and collected resources. You can also write your own query.",
     },
     {
       target: "execute-button",

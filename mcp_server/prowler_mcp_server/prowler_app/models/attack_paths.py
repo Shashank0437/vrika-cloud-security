@@ -44,11 +44,11 @@ class AttackPathScan(MinimalSerializerMixin, BaseModel):
     )
     provider_type: str | None = Field(
         default=None,
-        description="Cloud provider type (aws, azure, gcp, etc.)",
+        description="Attack Paths cloud provider type (aws, azure, or gcp)",
     )
     provider_uid: str | None = Field(
         default=None,
-        description="Provider's external identifier (e.g., AWS Account ID)",
+        description="Provider's external identifier: AWS account ID, GCP project ID, or Azure subscription ID",
     )
 
     @classmethod
@@ -129,7 +129,7 @@ class AttackPathCartographySchema(MinimalSerializerMixin, BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(description="Unique identifier for the schema resource")
-    provider: str = Field(description="Cloud provider type (aws, azure, gcp, etc.)")
+    provider: str = Field(description="Cloud provider type (aws, azure, or gcp)")
     cartography_version: str = Field(description="Version of the Cartography schema")
     schema_url: str = Field(description="URL to the Cartography schema page on GitHub")
     raw_schema_url: str = Field(

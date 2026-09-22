@@ -28,6 +28,14 @@ ADD_RESOURCE_LABEL_TEMPLATE = """
     RETURN COUNT(r) AS labeled_count
 """
 
+ADD_SCOPED_RESOURCE_LABEL_TEMPLATE = """
+    MATCH (account:__ROOT_LABEL__ {id: $provider_uid})-[:RESOURCE*0..1]->(r)
+    WHERE NOT r:__RESOURCE_LABEL__
+    WITH DISTINCT r LIMIT $batch_size
+    SET r:__RESOURCE_LABEL__
+    RETURN COUNT(r) AS labeled_count
+"""
+
 INSERT_FINDING_TEMPLATE = f"""
     UNWIND $findings_data AS finding_data
 
@@ -83,6 +91,28 @@ INSERT_FINDING_TEMPLATE = f"""
 
     RETURN merged_count, dropped_count
 """
+
+# Normalize full provider identifiers, never a bare resource-name suffix. Reject
+# ambiguous aliases instead of attaching a finding to an arbitrary matching node.
+INSERT_SCOPED_FINDING_TEMPLATE = """
+    UNWIND $findings_data AS finding_data
+    OPTIONAL MATCH (by_uid:__RESOURCE_LABEL__ {__NODE_UID_FIELD__: finding_data.resource_uid})
+    WITH finding_data, collect(DISTINCT by_uid) AS by_uid
+    OPTIONAL MATCH (by_id:__RESOURCE_LABEL__ {id: finding_data.resource_uid})
+    WITH finding_data, by_uid, collect(DISTINCT by_id) AS by_id
+    OPTIONAL MATCH (normalized:__RESOURCE_LABEL__ {__NODE_UID_FIELD__: finding_data.resource_short_uid})
+    WITH finding_data, by_uid, by_id, collect(DISTINCT normalized) AS normalized
+    OPTIONAL MATCH (normalized_id:__RESOURCE_LABEL__ {id: finding_data.resource_short_uid})
+    WITH finding_data, by_uid, by_id, normalized,
+        collect(DISTINCT normalized_id) AS normalized_ids
+    WITH finding_data,
+        CASE WHEN size(by_uid) > 0 THEN by_uid
+             WHEN size(by_id) > 0 THEN by_id
+             WHEN size(normalized) > 0 THEN normalized
+             ELSE normalized_ids END AS candidates
+    WITH finding_data,
+        CASE WHEN size(candidates) = 1 THEN head(candidates) ELSE null END AS resource
+""" + INSERT_FINDING_TEMPLATE[INSERT_FINDING_TEMPLATE.index("    FOREACH") :]
 
 # Internet queries (used by internet.py)
 

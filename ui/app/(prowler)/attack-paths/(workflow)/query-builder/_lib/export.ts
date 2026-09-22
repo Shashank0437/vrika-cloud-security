@@ -345,6 +345,7 @@ const drawNodeIcon = (
   y: number,
   category: string,
   description: string,
+  exportBadge?: string,
 ) => {
   const lowerDescription = description.toLowerCase();
   context.save();
@@ -369,7 +370,7 @@ const drawNodeIcon = (
     context.font = "700 11px sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText("AWS", x, y + 1);
+    context.fillText(exportBadge ?? "Cloud", x, y + 1);
   } else {
     context.font = "700 14px sans-serif";
     context.textAlign = "center";
@@ -434,7 +435,14 @@ const drawNode = (
   context.stroke();
 
   const typeLabel = truncateLabel(visual.description, 22);
-  drawNodeIcon(context, center.x, center.y, visual.category, typeLabel);
+  drawNodeIcon(
+    context,
+    center.x,
+    center.y,
+    visual.category,
+    typeLabel,
+    visual.exportBadge,
+  );
 
   context.fillStyle = "#ffffff";
   context.textAlign = "center";

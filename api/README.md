@@ -2,7 +2,113 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
-## Components
+## Attack Paths: AWS, GCP and Azure
+
+New scans automatically schedule Attack Paths for AWS, GCP and Azure. Existing
+GCP/Azure scans are not backfilled automatically; run a new scan after upgrading
+the API and workers. The existing graph database configuration is required.
+
+GCP inventory is restricted to the connected project. IAM collection additionally
+reads that project's ancestors and expands only groups referenced by collected
+policies. Azure inventory is restricted to the connected subscription; inherited
+RBAC comes from assignments returned for that scope, and Microsoft Graph expansion
+is restricted to groups referenced by those assignments. Credentials and sovereign
+cloud endpoints come from the existing provider connection. Neither integration
+grants itself permissions or enables APIs.
+
+| Coverage | GCP | Azure |
+|---|---|---|
+| Inventory and findings | Compute, buckets, secret metadata, Cloud Run, Functions, GKE clusters/node pools, Cloud SQL, BigQuery datasets | VMs, storage/containers, vaults, App Service/Functions, AKS, SQL servers |
+| Permission evidence | Direct and ancestor IAM, referenced predefined/custom role permissions, group memberships, user-managed key metadata | Direct/inherited RBAC, custom role actions and exclusions, transitive group membership, legacy vault policies |
+| Candidate escalation/data paths | Token creation, signing, key creation, actAs, policy/role changes, VM/serverless modification, data grants and impersonation chains | Role changes, VM commands/extensions, publishing, AKS admin credential permissions, storage keys/data, vault access and VM-identity chains |
+| Network configuration | VPC firewall targets, VM public IPs, forwarding rules, SQL authorized networks, public dataset ACLs | NIC/subnet NSGs, public-IP associations, SQL firewall rules, public blob configuration |
+| Restrictions and coverage | Conditional grants, directly attached project deny-policy evidence, per-service collection results | Conditional grants, deny-assignment evidence, separate PIM eligibility, per-service collection results |
+
+There are 34 GCP and 28 Azure predefined queries. These are investigation paths,
+**not proof of exploitability or AWS feature parity**. Grant analysis is conservative:
+conditional grants are excluded from unconditional candidate paths; Azure
+Actions/NotActions and DataActions/NotDataActions are evaluated per permission
+block, and PIM eligibility never creates an active assignment edge.
+
+Predefined GCP/Azure queries return the selected paths together with linked,
+unmuted failed findings and their `HAS_FINDING` edges, so the graph and resource
+details can display Related Findings. Paths without findings remain visible.
+This query enrichment uses the existing graph and requires no rescan. Custom
+queries still return only what their Cypher explicitly selects.
+
+Full effective-permission resolution is not implemented. Deny-policy evidence is
+not automatically subtracted from every allow path; GCP ancestor denies, principal
+access boundaries, OAuth scope enforcement, domain/federated principal expansion,
+and pod-level GKE/AKS access are not resolved. GCP membership paths display up to
+eight group hops. Azure ABAC, PIM activation requirements, and directory-role
+privilege escalation are not resolved. Public IP/firewall combinations are
+**exposure candidates**: rule priority, routing, hierarchical policies, destination
+matching and runtime service state may block access. No `Internet -> CAN_ACCESS`
+edges are synthesized from these candidates.
+
+### GCP read access and enabled APIs
+
+Grant read permissions to the identity used by the connected provider, not to the
+Neo4j server. Enabling an API and granting IAM permissions are separate steps.
+The API's reported consumer may be the scanned project or its credential/quota
+project; enable it in the project identified by the error. `serviceusage.services.use`
+may also be required on the quota project. No Secret Accessor, Storage Object
+Viewer, token-creation or administrator role is needed merely to collect metadata.
+
+| Collector | API | Relevant read permissions/access |
+|---|---|---|
+| Project and ancestor IAM | `cloudresourcemanager.googleapis.com` | `resourcemanager.projects.get`, `resourcemanager.projects.getIamPolicy`; ancestor folder/organization get and getIamPolicy access where applicable |
+| Resource IAM | `cloudasset.googleapis.com` | `cloudasset.assets.searchAllIamPolicies` on the scanned project; `iam.roles.get` for complete permission information |
+| Accounts, keys and roles | `iam.googleapis.com` | `iam.serviceAccounts.list`, `iam.serviceAccountKeys.list`, `iam.roles.get` |
+| Project deny policies | `iam.googleapis.com` | `iam.denypolicies.list`, `iam.denypolicies.get` |
+| Compute/network | `compute.googleapis.com` | `compute.instances.list`, `compute.firewalls.list`, `compute.forwardingRules.list`, `compute.globalForwardingRules.list` |
+| Storage metadata | `storage.googleapis.com` | `storage.buckets.list` (including bucket metadata) |
+| Secret metadata | `secretmanager.googleapis.com` | `secretmanager.secrets.list` |
+| Cloud Run | `run.googleapis.com` | `run.services.list` |
+| Cloud Functions | `cloudfunctions.googleapis.com` | `cloudfunctions.functions.list` |
+| GKE | `container.googleapis.com` | `container.clusters.list` |
+| Cloud SQL | `sqladmin.googleapis.com` | `cloudsql.instances.list` |
+| BigQuery dataset metadata | `bigquery.googleapis.com` | `bigquery.datasets.get` for visible datasets; dataset ACL visibility |
+| Referenced groups | `cloudidentity.googleapis.com` | Cloud Identity group lookup and membership-read authorization; Google Workspace/Cloud Identity directory authorization may be required in addition to project IAM |
+
+An API-disabled error can mask a subsequent permission denial. Re-run after
+enabling APIs to discover the next missing permission; a single scan cannot prove
+that all unexercised resource-level reads will be authorized.
+
+### Azure read access and licensing
+
+Subscription Reader normally covers the management-plane inventory. Custom roles
+must cover the relevant Compute, Network, Storage, KeyVault, Web,
+ContainerService, Sql and Authorization read operations, including role
+definitions/assignments, deny assignments and eligibility schedule instances.
+Ancestor assignment visibility depends on the identity's permitted scopes.
+Group expansion needs Microsoft Graph group-membership read authorization
+(typically application `GroupMember.Read.All` with administrator consent;
+hidden memberships can require additional authorization).
+PIM eligibility APIs can additionally require an Entra ID P2 or ID Governance
+license; extra RBAC permission alone does not resolve a licensing error.
+
+No secret values, storage keys, tokens, database rows, application settings,
+private key material or Kubernetes administrator credentials are fetched.
+Queries about those privileges analyse role definitions, not the protected data.
+
+Core credential/project/subscription errors fail ingestion. Optional service
+errors remain visible in scan details; if every service fails, the graph is not
+published. Services outside the collected inventory do not have findings linked.
+The provider's **Collection Coverage and Permission Errors** query exposes
+collection failures in the graph; an empty risk query is not evidence of safety
+when its prerequisite collection failed. Project IAM runs independently from
+Cloud Asset IAM search so a disabled Cloud Asset API does not erase project grants.
+AWS's existing ingestion and query catalog are unchanged.
+
+Focused backend tests live in `api/tests/attack_paths`. Run with
+`PYTHONPATH=src/backend DJANGO_SETTINGS_MODULE=config.django.testing`.
+Graph integration tests require an **empty disposable Neo4j instance**:
+set `ATTACK_PATHS_TEST_NEO4J_URI` and `ATTACK_PATHS_TEST_ALLOW_RESET=1` before
+running `pytest tests/attack_paths`. They remove fixture nodes after each test;
+never point this test suite at a production graph database.
+
+## Backend components
 The Prowler API is composed of the following components:
 
 - The JSON API, which is an API built with Django Rest Framework.

@@ -120,6 +120,26 @@ describe("getAttackPathScans", () => {
     expect(result?.data).toHaveLength(22);
   });
 
+  it("preserves AWS, GCP, and Azure scans without applying a provider filter", async () => {
+    const response = pageResponse(["aws", "gcp", "azure"], 1, 1, 3);
+    response.data[1].attributes.provider_type = "gcp";
+    response.data[2].attributes.provider_type = "azure";
+    handleApiResponseMock.mockResolvedValueOnce(response);
+
+    const result = await getAttackPathScans();
+
+    expect(result?.data.map((scan) => scan.attributes.provider_type)).toEqual([
+      "aws",
+      "gcp",
+      "azure",
+    ]);
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(Array.from(url.searchParams.keys())).toEqual([
+      "page[number]",
+      "page[size]",
+    ]);
+  });
+
   it("stops requesting when the current page equals meta.pagination.pages", async () => {
     // Given a single-page response
     handleApiResponseMock.mockResolvedValueOnce(

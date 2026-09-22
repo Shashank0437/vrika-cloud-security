@@ -71,6 +71,11 @@ describe("resolveNodeVisual", () => {
           Icon: AzureProviderBadge,
         },
         {
+          label: "AzureSubscription",
+          description: "Azure Subscription",
+          Icon: AzureProviderBadge,
+        },
+        {
           label: "GCPProject",
           description: "Google Cloud Project",
           Icon: GCPProviderBadge,
@@ -139,6 +144,42 @@ describe("resolveNodeVisual", () => {
       ["ServiceAccount", NODE_CATEGORY.IDENTITY, "Service Account", Bot],
       ["AccessKey", NODE_CATEGORY.SECRET, "Access Key", KeyRound],
       ["Secret", NODE_CATEGORY.SECRET, "Secret", KeyRound],
+      ["GCPInstance", NODE_CATEGORY.COMPUTE, "GCP Instance", Server],
+      ["GCPBucket", NODE_CATEGORY.STORAGE, "GCP Bucket", GCPProviderBadge],
+      ["GCPServiceAccount", NODE_CATEGORY.IDENTITY, "GCP Service Account", Bot],
+      ["GCPPrincipal", NODE_CATEGORY.IDENTITY, "GCP Principal", Users],
+      [
+        "GCPPolicyBinding",
+        NODE_CATEGORY.IDENTITY,
+        "GCP Policy Binding",
+        FileKey2,
+      ],
+      ["AzureVM", NODE_CATEGORY.COMPUTE, "Azure Virtual Machine", Server],
+      ["AzurePrincipal", NODE_CATEGORY.IDENTITY, "Azure Principal", Users],
+      [
+        "AzureRoleAssignment",
+        NODE_CATEGORY.IDENTITY,
+        "Azure Role Assignment",
+        UserCog,
+      ],
+      [
+        "AzureRoleDefinition",
+        NODE_CATEGORY.IDENTITY,
+        "Azure Role Definition",
+        ShieldCheck,
+      ],
+      [
+        "AzureStorageAccount",
+        NODE_CATEGORY.STORAGE,
+        "Azure Storage Account",
+        AzureProviderBadge,
+      ],
+      [
+        "AzureServicePrincipal",
+        NODE_CATEGORY.IDENTITY,
+        "Azure Service Principal",
+        Bot,
+      ],
     ] as const)(
       "should map %s to %s with the expected icon",
       (label, category, description, Icon) => {

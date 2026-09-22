@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus, TriangleAlert } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef } from "react";
 
@@ -195,11 +195,29 @@ const getColumns = ({
     header: () => <span className="text-sm font-medium">Graph</span>,
     cell: ({ row }) =>
       row.original.attributes.graph_data_ready ? (
-        <Check
-          size={16}
-          aria-label="Graph available"
-          className="text-text-success-primary"
-        />
+        row.original.attributes.state === SCAN_STATES.FAILED ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0}>
+                <TriangleAlert
+                  size={16}
+                  aria-label="Graph available but may be incomplete"
+                  className="text-text-warning-primary"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              This scan failed after producing graph data. Results may be
+              incomplete.
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Check
+            size={16}
+            aria-label="Graph available"
+            className="text-text-success-primary"
+          />
+        )
       ) : (
         <Minus
           size={16}
@@ -224,7 +242,7 @@ const getColumns = ({
 ];
 
 /**
- * Table displaying AWS account Attack Paths scans
+ * Table displaying Attack Paths scans for supported cloud providers
  * Shows scan metadata and allows selection of completed scans
  */
 export const ScanListTable = ({ scans }: ScanListTableProps) => {
