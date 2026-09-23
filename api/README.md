@@ -46,6 +46,9 @@ Attributes are `status`, `note`, optional `previous_status` for stale-write
 protection, and `confirm_mute`/`reason` for exceptions. Both routes expose
 `/notes` and paginated `/history`; individual note PATCH/DELETE routes use the
 note ID. UID aliases are accepted only when they identify one visible provider.
+Stale edits are rejected with a refresh instruction rather than overwriting newer
+triage decisions. Expected API errors cross the UI server-action boundary as
+structured results so production rendering does not hide that instruction.
 
 ## Executive and full PDF layout
 

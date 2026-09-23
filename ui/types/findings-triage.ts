@@ -147,6 +147,20 @@ export interface FindingTriageHistory {
   hasNext: boolean;
 }
 
+interface TriageActionSuccess<T> {
+  ok: true;
+  value: T;
+}
+
+interface TriageActionFailure {
+  ok: false;
+  message: string;
+}
+
+export type TriageActionResult<T> =
+  | TriageActionSuccess<T>
+  | TriageActionFailure;
+
 export interface FindingTriageLoadedNote {
   noteId: string;
   noteBody: string;

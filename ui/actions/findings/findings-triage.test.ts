@@ -38,6 +38,51 @@ describe("findings triage actions", () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
   });
 
+  it("returns a serializable conflict across the server-action boundary", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "true");
+    const server = await import("./findings-triage.server");
+    handleApiResponseMock.mockResolvedValue({
+      error: "Triage changed; refresh the finding before saving.",
+      status: 409,
+    });
+    const input = {
+      findingId: "snapshot",
+      findingUid: "uid",
+      triageId: "triage",
+      notesCount: 0,
+      status: FINDING_TRIAGE_STATUS.UNDER_REVIEW,
+      previousStatus: FINDING_TRIAGE_STATUS.OPEN,
+    };
+    await expect(server.updateFindingTriage(input)).resolves.toEqual({
+      ok: false,
+      message: "Triage changed; refresh the finding before saving.",
+    });
+    const { updateFindingTriage } = await importActions();
+    await expect(updateFindingTriage(input)).rejects.toThrow(
+      "Triage changed; refresh the finding before saving.",
+    );
+  });
+
+  it("does not expose unexpected server failures to the client", async () => {
+    const server = await import("./findings-triage.server");
+    fetchMock.mockRejectedValue(
+      new Error("internal-private-connection-details"),
+    );
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await server.updateFindingTriage({
+      findingId: "snapshot",
+      findingUid: "uid",
+      triageId: "triage",
+      notesCount: 0,
+      status: FINDING_TRIAGE_STATUS.UNDER_REVIEW,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: "Could not complete the triage request. Please try again.",
+    });
+    expect(log).toHaveBeenCalled();
+  });
+
   it("sends a single atomic Vrika exception update using the snapshot ID", async () => {
     vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "true");
     const { updateFindingTriage } = await importActions();
