@@ -33,6 +33,20 @@ export const getRolePermissions = (attributes: RolePermissionAttributes) => {
   const isCloudEnvironment = process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true";
 
   const permissions = [
+    ...(process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true"
+      ? [
+          {
+            key: "manage_triage",
+            label: "Manage Triage",
+            enabled: attributes.manage_triage ?? false,
+          },
+          {
+            key: "manage_triage_exceptions",
+            label: "Manage Triage Exceptions",
+            enabled: attributes.manage_triage_exceptions ?? false,
+          },
+        ]
+      : []),
     {
       key: "manage_users",
       label: "Manage Users",

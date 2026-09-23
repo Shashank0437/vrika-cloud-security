@@ -10,16 +10,24 @@ import {
   type FindingTriageSummary,
 } from "@/types/findings-triage";
 
-// API/backend triage implementation is external to this UI slice. Keep final
-// contract churn isolated here (and the server action transport) so table/modal
-// components continue consuming stable domain DTOs.
 interface FindingTriageAdapterOptions {
   canEdit?: boolean;
+  vrikaTriage?: boolean;
   disabledReason?: FindingTriageDisabledReason;
   billingHref?: string;
 }
 
+interface VrikaTriageAttributes {
+  id: string | null;
+  status: unknown;
+  notes_count: number;
+  can_edit: boolean;
+  can_manage_exceptions: boolean;
+  finding_uid: string;
+}
+
 interface FindingTriageAttributes {
+  triage?: VrikaTriageAttributes | null;
   finding_id?: string;
   finding_uid?: string;
   uid?: string;
@@ -71,6 +79,13 @@ const normalizeTriageFields = (
 ): NormalizedTriageFields => {
   const attributes = finding.attributes ?? {};
 
+  if (attributes.triage && isFindingTriageStatus(attributes.triage.status)) {
+    return {
+      status: attributes.triage.status,
+      hasVisibleNote: attributes.triage.notes_count > 0,
+    };
+  }
+
   if (isFindingTriageStatus(attributes.triage_status)) {
     return {
       status: attributes.triage_status,
@@ -95,9 +110,14 @@ const createSummary = (
   const attributes = finding.attributes ?? {};
   const summary: FindingTriageSummary = {
     findingId: attributes.finding_id || finding.id || "",
-    findingUid: attributes.uid || attributes.finding_uid || "",
-    triageId: attributes.triage_id || null,
-    notesCount: attributes.triage_notes_count ?? 0,
+    findingUid:
+      attributes.uid ||
+      attributes.finding_uid ||
+      attributes.triage?.finding_uid ||
+      "",
+    triageId: attributes.triage?.id || attributes.triage_id || null,
+    notesCount:
+      attributes.triage?.notes_count ?? attributes.triage_notes_count ?? 0,
     status: triageFields.status,
     label: FINDING_TRIAGE_STATUS_LABELS[triageFields.status],
     hasVisibleNote: triageFields.hasVisibleNote,
@@ -105,7 +125,16 @@ const createSummary = (
       typeof attributes.muted === "boolean"
         ? attributes.muted
         : attributes.status === "MUTED",
-    canEdit: options.canEdit ?? false,
+    canEdit: options.vrikaTriage
+      ? attributes.triage?.can_edit === true
+      : (options.canEdit ?? false),
+    ...(options.vrikaTriage
+      ? {
+          vrikaTriage: true,
+          canManageExceptions:
+            attributes.triage?.can_manage_exceptions === true,
+        }
+      : {}),
     billingHref: options.billingHref ?? FINDING_TRIAGE_BILLING_HREF,
   };
 

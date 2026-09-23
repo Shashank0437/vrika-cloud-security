@@ -136,6 +136,8 @@ class BaseTenantViewset(BaseViewSet):
             manage_providers=True,
             manage_integrations=True,
             manage_scans=True,
+            manage_triage=True,
+            manage_triage_exceptions=True,
             unlimited_visibility=True,
         )
         UserRoleRelationship.objects.using(MainRouter.admin_db).create(

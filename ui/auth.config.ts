@@ -11,8 +11,8 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { getToken, getUserByMe } from "./actions/auth";
-import { authApiBasePath, withAppPath, stripAppPath } from "./lib/base-path";
 import { apiBaseUrl } from "./lib";
+import { authApiBasePath, stripAppPath, withAppPath } from "./lib/base-path";
 import type { RolePermissionAttributes } from "./types/users";
 
 interface CustomJwtPayload extends JwtPayload {
@@ -53,6 +53,8 @@ const DEFAULT_PERMISSIONS: RolePermissionAttributes = {
   manage_account: false,
   manage_providers: false,
   manage_scans: false,
+  manage_triage: false,
+  manage_triage_exceptions: false,
   manage_integrations: false,
   manage_billing: false,
   manage_alerts: false,

@@ -14,6 +14,8 @@ class Permissions(Enum):
     MANAGE_PROVIDERS = "manage_providers"
     MANAGE_INTEGRATIONS = "manage_integrations"
     MANAGE_SCANS = "manage_scans"
+    MANAGE_TRIAGE = "manage_triage"
+    MANAGE_TRIAGE_EXCEPTIONS = "manage_triage_exceptions"
     UNLIMITED_VISIBILITY = "unlimited_visibility"
 
 

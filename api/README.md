@@ -2,6 +2,51 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## Vrika findings triage
+
+Triage is an organization-private workflow attached to **tenant + provider +
+finding UID**, not a single scan snapshot. It supports Open, Under Review,
+Remediating, Risk Accepted and False Positive, one editable 500-character note,
+and an audit history. Completed scans mark an observed PASS as Resolved and a
+subsequent observed FAIL as Reopened. Repeated or out-of-order tasks cannot
+overwrite newer results. Missing findings, scoped-out checks and failed scans
+are never treated as proof of resolution.
+
+`manage_triage` permits ordinary status/note changes.
+`manage_triage_exceptions` additionally permits Risk Accepted and False Positive.
+The upgrade grants both to `admin`, and only ordinary triage to `vrika_member`;
+custom roles remain unchanged. Existing users inherit these role updates without
+being re-provisioned. Provider-group visibility applies to reads and writes.
+
+Exceptions require explicit mute confirmation and a reason of 3-500 characters.
+Status, note, audit event and Mutelist rule are saved atomically; historical
+muting and group reaggregation follow through the existing worker tasks.
+Provider-ambiguous UIDs and UIDs over the existing Mutelist 255-character limit
+are rejected for exceptions instead of muting other providers. **Returning to
+Open does not disable the Mutelist rule or unmute historical findings**; manage
+that rule separately. Triage never changes raw check results or creates emails,
+external tickets or Manual Pass attestations. Clearing a note preserves its
+previous text in the organization-private audit history.
+
+The feature is **off by default**. For an approved deployment:
+
+1. Apply migrations through `0100_triage_managed_roles` using the normal admin
+   database migration procedure, and deploy the matching Vrika bridge templates.
+2. Set `VRIKA_TRIAGE_ENABLED=true` for API and scan/overview workers.
+3. Build the UI with `NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED=true` (Docker build arg).
+   Do not enable `NEXT_PUBLIC_IS_CLOUD_ENV`; Alerts remains separate.
+
+There is no automatic historical backfill. Existing snapshots show Open/Resolved
+until a triage write or a new completed scan initializes persistent state.
+Notes/history are available from each finding's action menu, including expanded
+groups and resource drawers; read-only users can view them. API writes use
+JSON:API `PATCH /findings/{snapshot-id}/triage` with type `finding-triages` and
+the snapshot ID as `data.id`, or `/finding-triages/{triage-id}` with its triage ID.
+Attributes are `status`, `note`, optional `previous_status` for stale-write
+protection, and `confirm_mute`/`reason` for exceptions. Both routes expose
+`/notes` and paginated `/history`; individual note PATCH/DELETE routes use the
+note ID. UID aliases are accepted only when they identify one visible provider.
+
 ## Executive and full PDF layout
 
 Scan reports use a compact overview with score/resource/priority metrics,

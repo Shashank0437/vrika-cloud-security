@@ -3,8 +3,8 @@ import {
   getComplianceOcsf,
   getCompliancePdfReport,
   getVrikaScanPdfReport,
-  shareVrikaScanReport,
   type ScanBinaryResult,
+  shareVrikaScanReport,
 } from "@/actions/scans";
 import { getTask } from "@/actions/task";
 import { auth } from "@/auth.config";
@@ -300,7 +300,8 @@ export const shareReportOverEmail = async (
   if ("success" in result && result.success) {
     toast({
       title: "Report Shared",
-      description: "The scan report has been sent to your organisation's configured email recipients.",
+      description:
+        "The scan report has been sent to your organisation's configured email recipients.",
     });
     return;
   }
@@ -582,6 +583,17 @@ export const permissionFormFields: PermissionInfo[] = [
     field: "manage_scans",
     label: "Manage Scans",
     description: "Allows launching and configuring scans security scans",
+  },
+  {
+    field: "manage_triage",
+    label: "Manage Triage",
+    description: "Allows updating finding triage statuses and notes",
+  },
+  {
+    field: "manage_triage_exceptions",
+    label: "Manage Triage Exceptions",
+    description:
+      "Allows accepting risk or false positives and muting findings; also requires Manage Triage",
   },
   {
     field: "manage_alerts",

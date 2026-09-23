@@ -38,6 +38,70 @@ describe("findings triage actions", () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
   });
 
+  it("sends a single atomic Vrika exception update using the snapshot ID", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "true");
+    const { updateFindingTriage } = await importActions();
+    handleApiResponseMock.mockResolvedValue({ data: { id: "triage-1" } });
+    await updateFindingTriage({
+      findingId: "snapshot",
+      findingUid: "same-uid",
+      triageId: null,
+      notesCount: 1,
+      noteId: "note",
+      note: "",
+      status: "risk_accepted",
+      previousStatus: "open",
+      reason: "Approved exception",
+      confirmMute: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/v1/findings/snapshot/triage",
+      expect.objectContaining({
+        body: JSON.stringify({
+          data: {
+            type: "finding-triages",
+            id: "snapshot",
+            attributes: {
+              status: "risk_accepted",
+              previous_status: "open",
+              note: "",
+              reason: "Approved exception",
+              confirm_mute: true,
+            },
+          },
+        }),
+      }),
+    );
+    expect(createMuteRuleMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves history pagination query parameters", async () => {
+    const { loadFindingTriageHistory } = await importActions();
+    handleApiResponseMock.mockResolvedValue({
+      data: [],
+      links: { next: null },
+    });
+    await loadFindingTriageHistory(
+      {
+        findingId: "snapshot",
+        findingUid: "uid",
+        triageId: "triage-1",
+        notesCount: 0,
+        status: "open",
+        label: "Open",
+        canEdit: false,
+        hasVisibleNote: false,
+        isMuted: false,
+        billingHref: "",
+      },
+      2,
+    );
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.pathname).toBe("/api/v1/finding-triages/triage-1/history");
+    expect(url.searchParams.get("page[number]")).toBe("2");
+  });
+
   it("should load notes through the persisted triage route when triageId exists", async () => {
     // Given
     const { loadLatestFindingTriageNote } = await importActions();

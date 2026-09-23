@@ -170,6 +170,9 @@ export const getUserByMe = async (accessToken: string) => {
       manage_account: userRole.attributes.manage_account || false,
       manage_providers: userRole.attributes.manage_providers || false,
       manage_scans: userRole.attributes.manage_scans || false,
+      manage_triage: userRole.attributes.manage_triage || false,
+      manage_triage_exceptions:
+        userRole.attributes.manage_triage_exceptions || false,
       manage_integrations: userRole.attributes.manage_integrations || false,
       manage_billing: userRole.attributes.manage_billing || false,
       manage_alerts: userRole.attributes.manage_alerts || false,

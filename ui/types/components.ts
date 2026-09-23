@@ -455,6 +455,8 @@ export interface InvitationProps {
         manage_providers?: boolean;
         manage_integrations?: boolean;
         manage_scans?: boolean;
+        manage_triage?: boolean;
+        manage_triage_exceptions?: boolean;
         manage_alerts?: boolean;
         permission_state?: PermissionState;
       };
@@ -480,6 +482,8 @@ export interface Role {
     manage_providers: boolean;
     manage_integrations: boolean;
     manage_scans: boolean;
+    manage_triage?: boolean;
+    manage_triage_exceptions?: boolean;
     manage_alerts?: boolean;
     unlimited_visibility: boolean;
     permission_state: PermissionState;

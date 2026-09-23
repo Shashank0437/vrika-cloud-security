@@ -41,6 +41,7 @@ from api.models import (
     UserRoleRelationship,
 )
 from api.rls import Tenant
+from api.triage import TriageSummaryListSerializer, serialize_triage_summary
 from api.v1.serializer_utils.authentication import blacklist_user_refresh_tokens
 from api.v1.serializer_utils.integrations import (
     AWSCredentialSerializer,
@@ -1554,11 +1555,17 @@ class FindingSerializer(RLSSerializer):
     """
 
     resources = serializers.ResourceRelatedField(many=True, read_only=True)
+    triage = serializers.SerializerMethodField()
+
+    def get_triage(self, obj) -> dict | None:
+        return serialize_triage_summary(obj, self)
 
     class Meta:
+        list_serializer_class = TriageSummaryListSerializer
         model = Finding
         fields = [
             "id",
+            "triage",
             "uid",
             "delta",
             "status",
@@ -1591,10 +1598,17 @@ class FindingIncludeSerializer(RLSSerializer):
     Serializer for the include Finding model.
     """
 
+    triage = serializers.SerializerMethodField()
+
+    def get_triage(self, obj) -> dict | None:
+        return serialize_triage_summary(obj, self)
+
     class Meta:
+        list_serializer_class = TriageSummaryListSerializer
         model = Finding
         fields = [
             "id",
+            "triage",
             "uid",
             "status",
             "severity",
@@ -2268,6 +2282,8 @@ class RoleSerializer(RLSSerializer, BaseWriteSerializer):
             "manage_integrations",
             "manage_providers",
             "manage_scans",
+            "manage_triage",
+            "manage_triage_exceptions",
             "permission_state",
             "unlimited_visibility",
             "inserted_at",
@@ -2405,6 +2421,8 @@ class RoleIncludeSerializer(RLSSerializer):
             "manage_integrations",
             "manage_providers",
             "manage_scans",
+            "manage_triage",
+            "manage_triage_exceptions",
             "permission_state",
             "unlimited_visibility",
             "inserted_at",
@@ -4172,9 +4190,7 @@ class TenantBrandingUpdateSerializer(BaseWriteSerializer):
         if not decoded:
             raise ValidationError({"logo_base64": "Empty image."})
         if len(decoded) > MAX_LOGO_BYTES:
-            raise ValidationError(
-                {"logo_base64": "Logo exceeds the 2 MB size limit."}
-            )
+            raise ValidationError({"logo_base64": "Logo exceeds the 2 MB size limit."})
 
         detected = _detect_image_content_type(decoded)
         if detected is None:
@@ -4595,6 +4611,13 @@ class FindingGroupResourceSerializer(BaseSerializerV1):
     first_seen_at = serializers.DateTimeField(required=False, allow_null=True)
     last_seen_at = serializers.DateTimeField(required=False, allow_null=True)
     muted_reason = serializers.CharField(required=False, allow_null=True)
+    triage = serializers.SerializerMethodField()
+
+    def get_triage(self, obj) -> dict | None:
+        return serialize_triage_summary(obj, self)
+
+    class Meta:
+        list_serializer_class = TriageSummaryListSerializer
 
     class JSONAPIMeta:
         resource_name = "finding-group-resources"

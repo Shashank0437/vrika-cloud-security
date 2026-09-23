@@ -1,4 +1,5 @@
 from allauth.socialaccount.providers.saml.views import ACSView, MetadataView, SLSView
+from api.v1.triage import FindingTriageViewSet
 from api.v1.views import (
     AttackPathsScanViewSet,
     ComplianceFrameworkViewSet,
@@ -81,6 +82,7 @@ router.register(
 router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"resources", ResourceViewSet, basename="resource")
 router.register(r"findings", FindingViewSet, basename="finding")
+router.register(r"finding-triages", FindingTriageViewSet, basename="finding-triage")
 router.register(r"finding-groups", FindingGroupViewSet, basename="finding-group")
 router.register(r"roles", RoleViewSet, basename="role")
 router.register(
@@ -130,6 +132,41 @@ integrations_router.register(
 )
 
 urlpatterns = [
+    path(
+        "finding-triages/<uuid:pk>/notes/<uuid:note_id>",
+        FindingTriageViewSet.as_view({"patch": "update_note", "delete": "delete_note"}),
+        name="finding-triage-note-detail",
+    ),
+    path(
+        "finding-triages/<uuid:pk>/notes",
+        FindingTriageViewSet.as_view({"get": "notes"}),
+        name="finding-triage-notes",
+    ),
+    path(
+        "finding-triages/<uuid:pk>/history",
+        FindingTriageViewSet.as_view({"get": "history"}),
+        name="finding-triage-history",
+    ),
+    path(
+        "findings/<path:finding_uid>/triage/notes/<uuid:note_id>",
+        FindingTriageViewSet.as_view({"patch": "update_note", "delete": "delete_note"}),
+        name="finding-uid-triage-note-detail",
+    ),
+    path(
+        "findings/<path:finding_uid>/triage/notes",
+        FindingTriageViewSet.as_view({"get": "notes"}),
+        name="finding-uid-triage-notes",
+    ),
+    path(
+        "findings/<path:finding_uid>/triage/history",
+        FindingTriageViewSet.as_view({"get": "history"}),
+        name="finding-uid-triage-history",
+    ),
+    path(
+        "findings/<path:finding_uid>/triage",
+        FindingTriageViewSet.as_view({"patch": "partial_update"}),
+        name="finding-uid-triage",
+    ),
     path("tokens", CustomTokenObtainView.as_view(), name="token-obtain"),
     path("tokens/refresh", CustomTokenRefreshView.as_view(), name="token-refresh"),
     path("tokens/switch", CustomTokenSwitchTenantView.as_view(), name="token-switch"),

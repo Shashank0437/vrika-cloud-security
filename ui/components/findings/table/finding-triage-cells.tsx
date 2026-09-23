@@ -256,11 +256,12 @@ function FindingNoteActionItemContent({
     triage.disabledReason === FINDING_TRIAGE_DISABLED_REASON.CLOUD_ONLY;
   const canOpenNewNoteModal =
     !triage.hasVisibleNote &&
-    ((triage.canEdit && hasUpdateHandler) || isCloudOnly);
+    ((triage.canEdit && hasUpdateHandler) ||
+      isCloudOnly ||
+      triage.vrikaTriage === true);
   const canOpenExistingNoteModal =
     triage.hasVisibleNote &&
-    triage.canEdit &&
-    hasUpdateHandler &&
+    ((triage.canEdit && hasUpdateHandler) || triage.vrikaTriage === true) &&
     Boolean(onTriageNoteLoadAction) &&
     !isLoadingNote;
   const disabledCopy = getDisabledCopy({ triage, hasUpdateHandler });
@@ -271,7 +272,9 @@ function FindingNoteActionItemContent({
     ? "Loading note..."
     : triage.hasVisibleNote
       ? "Open note"
-      : "Add Triage Note";
+      : triage.vrikaTriage
+        ? "Triage notes & history"
+        : "Add Triage Note";
 
   const handleNoteSelect = async () => {
     if (!canOpenNoteModal) {

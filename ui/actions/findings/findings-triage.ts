@@ -6,6 +6,7 @@ import { apiBaseUrl, getAuthHeaders } from "@/lib";
 import { handleApiResponse } from "@/lib/server-actions-helper";
 import {
   FINDING_TRIAGE_STATUS_LABELS,
+  type FindingTriageHistory,
   type FindingTriageLoadedNote,
   type FindingTriageSummary,
   isMutelistShortcutStatus,
@@ -47,7 +48,9 @@ const buildApiUrl = (path: `/${string}`) => {
   }
 
   const url = new URL(apiBaseUrl);
-  url.pathname = `${url.pathname.replace(/\/$/, "")}${path}`;
+  const [pathname, query = ""] = path.split("?");
+  url.pathname = `${url.pathname.replace(/\/$/, "")}${pathname}`;
+  url.search = query;
   return url.toString();
 };
 
@@ -57,7 +60,9 @@ async function getJsonApi(path: `/${string}`) {
     headers,
   });
 
-  return handleApiResponse(response);
+  const result = await handleApiResponse(response);
+  throwIfApiError(result);
+  return result;
 }
 
 const throwIfApiError = (result: unknown) => {
@@ -189,6 +194,9 @@ async function resolveFindingUid({
   findingId,
   findingUid,
 }: Pick<UpdateFindingTriageInput, "findingId" | "findingUid">) {
+  if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+    return findingId;
+  }
   if (findingUid) {
     return findingUid;
   }
@@ -236,6 +244,26 @@ export async function updateFindingTriage(input: UpdateFindingTriageInput) {
     triagePath = `/findings/${encodePathSegment(findingUid)}/triage`;
   }
 
+  if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+    return patchJsonApi(triagePath, {
+      data: {
+        type: "finding-triages",
+        id: input.triageId || input.findingId,
+        attributes: {
+          ...(input.status ? { status: input.status } : {}),
+          ...(input.previousStatus
+            ? { previous_status: input.previousStatus }
+            : {}),
+          ...(input.note !== undefined ? { note: input.note } : {}),
+          ...(input.reason !== undefined ? { reason: input.reason } : {}),
+          ...(input.confirmMute !== undefined
+            ? { confirm_mute: input.confirmMute }
+            : {}),
+        },
+      },
+    });
+  }
+
   if (input.note !== undefined && input.notesCount > 0 && input.noteId) {
     const notePath: `/${string}` = `${triagePath}/notes/${input.noteId}`;
     const noteResult =
@@ -261,4 +289,18 @@ export async function updateFindingTriage(input: UpdateFindingTriageInput) {
   );
   await createMuteRuleOrRollback(input, findingUid);
   return result;
+}
+
+export async function loadFindingTriageHistory(
+  triage: FindingTriageSummary,
+  page = 1,
+): Promise<FindingTriageHistory> {
+  const path: `/${string}` = triage.triageId
+    ? `/finding-triages/${triage.triageId}/history`
+    : `/findings/${encodePathSegment(triage.findingId)}/triage/history`;
+  const result = await getJsonApi(`${path}?page[number]=${page}`);
+  if (!Array.isArray(result?.data)) {
+    throw new Error("Could not load triage history.");
+  }
+  return { events: result.data, hasNext: Boolean(result.links?.next) };
 }

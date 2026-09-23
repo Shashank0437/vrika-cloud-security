@@ -36,6 +36,51 @@ const expectNoRawTransportKeys = (value: Record<string, unknown>) => {
 };
 
 describe("provisional findings triage contract fixtures", () => {
+  it("uses backend capabilities and nested state in Vrika mode", () => {
+    const [summary] = adaptFindingTriageSummariesResponse(
+      {
+        data: [
+          {
+            id: "snapshot",
+            attributes: {
+              uid: "stable",
+              status: "FAIL",
+              triage: {
+                id: "triage",
+                status: "under_review",
+                notes_count: 1,
+                can_edit: true,
+                can_manage_exceptions: false,
+                finding_uid: "stable",
+              },
+            },
+          },
+        ],
+      },
+      { vrikaTriage: true, canEdit: false },
+    );
+    expect(summary).toMatchObject({
+      findingId: "snapshot",
+      triageId: "triage",
+      status: "under_review",
+      canEdit: true,
+      canManageExceptions: false,
+      hasVisibleNote: true,
+    });
+  });
+
+  it("fails closed when Vrika backend capability is missing", () => {
+    const [summary] = adaptFindingTriageSummariesResponse(
+      {
+        data: [
+          { id: "snapshot", attributes: { status: "FAIL", triage: null } },
+        ],
+      },
+      { vrikaTriage: true, canEdit: true },
+    );
+    expect(summary.canEdit).toBe(false);
+    expect(summary.canManageExceptions).toBe(false);
+  });
   it("should document every triage status the provisional contract can return", () => {
     // Given
     const input = {

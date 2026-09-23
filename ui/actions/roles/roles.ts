@@ -107,6 +107,13 @@ export const addRole = async (formData: FormData) => {
     },
   };
 
+  if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+    payload.data.attributes.manage_triage =
+      formData.get("manage_triage") === "true";
+    payload.data.attributes.manage_triage_exceptions =
+      formData.get("manage_triage_exceptions") === "true";
+  }
+
   // Conditionally include Prowler Cloud permissions.
   if (process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true") {
     payload.data.attributes.manage_billing =
@@ -163,6 +170,13 @@ export const updateRole = async (formData: FormData, roleId: string) => {
       relationships: {},
     },
   };
+
+  if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+    payload.data.attributes.manage_triage =
+      formData.get("manage_triage") === "true";
+    payload.data.attributes.manage_triage_exceptions =
+      formData.get("manage_triage_exceptions") === "true";
+  }
 
   // Conditionally include Prowler Cloud permissions.
   if (process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true") {

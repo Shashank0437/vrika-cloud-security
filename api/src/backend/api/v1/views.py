@@ -184,8 +184,6 @@ from api.v1.serializers import (
     LighthouseProviderModelsSerializer,
     LighthouseTenantConfigSerializer,
     LighthouseTenantConfigUpdateSerializer,
-    TenantBrandingSerializer,
-    TenantBrandingUpdateSerializer,
     MembershipSerializer,
     MuteRuleCreateSerializer,
     MuteRuleSerializer,
@@ -231,6 +229,8 @@ from api.v1.serializers import (
     TenantApiKeyCreateSerializer,
     TenantApiKeySerializer,
     TenantApiKeyUpdateSerializer,
+    TenantBrandingSerializer,
+    TenantBrandingUpdateSerializer,
     TenantSerializer,
     ThreatScoreSnapshotSerializer,
     TokenRefreshSerializer,
@@ -1170,6 +1170,8 @@ class UserViewSet(BaseUserViewset):
                 manage_providers=True,
                 manage_integrations=True,
                 manage_scans=True,
+                manage_triage=True,
+                manage_triage_exceptions=True,
                 unlimited_visibility=True,
             )
             UserRoleRelationship.objects.using(MainRouter.admin_db).create(
@@ -2853,6 +2855,7 @@ class ScanViewSet(BaseRLSViewSet):
         provider_type = str(getattr(scan.provider, "provider", "aws") or "aws")
 
         import threading
+
         from tasks.jobs.report import share_vrika_scan_email_job
 
         def _run_email_dispatch():
@@ -2865,7 +2868,9 @@ class ScanViewSet(BaseRLSViewSet):
                     provider_type=provider_type,
                 )
             except Exception as exc:
-                logger.warning("Failed to dispatch share email in background thread: %s", exc)
+                logger.warning(
+                    "Failed to dispatch share email in background thread: %s", exc
+                )
 
         t = threading.Thread(target=_run_email_dispatch, daemon=True)
         t.start()
@@ -2883,10 +2888,6 @@ class ScanViewSet(BaseRLSViewSet):
     )
     def vrika_report_share_email(self, request, pk=None):
         return self.share_email(request, pk=pk)
-
-
-
-
 
     def create(self, request, *args, **kwargs):
         input_serializer = self.get_serializer(data=request.data)
@@ -9100,7 +9101,9 @@ class FindingGroupViewSet(JsonApiFilterMixin, BaseRLSViewSet):
                 id_order = {rid: idx for idx, rid in enumerate(page_ids)}
                 results = self._post_process_resources(resource_data)
                 results.sort(key=lambda r: id_order.get(r["resource_id"], 0))
-                serializer = FindingGroupResourceSerializer(results, many=True)
+                serializer = FindingGroupResourceSerializer(
+                    results, many=True, context=self.get_serializer_context()
+                )
                 return self.get_paginated_response(serializer.data)
 
             page_ids = [row["resource_id"] for row in ordering_qs]
@@ -9110,7 +9113,9 @@ class FindingGroupViewSet(JsonApiFilterMixin, BaseRLSViewSet):
             id_order = {rid: idx for idx, rid in enumerate(page_ids)}
             results = self._post_process_resources(resource_data)
             results.sort(key=lambda r: id_order.get(r["resource_id"], 0))
-            serializer = FindingGroupResourceSerializer(results, many=True)
+            serializer = FindingGroupResourceSerializer(
+                results, many=True, context=self.get_serializer_context()
+            )
             return Response(serializer.data)
 
         mapping_qs = self._build_resource_mapping_queryset(
@@ -9130,14 +9135,18 @@ class FindingGroupViewSet(JsonApiFilterMixin, BaseRLSViewSet):
             id_order = {rid: idx for idx, rid in enumerate(page_ids)}
             results = self._post_process_resources(resource_data)
             results.sort(key=lambda r: id_order.get(r["resource_id"], 0))
-            serializer = FindingGroupResourceSerializer(results, many=True)
+            serializer = FindingGroupResourceSerializer(
+                results, many=True, context=self.get_serializer_context()
+            )
             return self.get_paginated_response(serializer.data)
 
         resource_data = self._build_resource_aggregation(
             filtered_queryset, resource_ids=resource_ids, tenant_id=tenant_id
         ).order_by("resource_id")
         results = self._post_process_resources(resource_data)
-        serializer = FindingGroupResourceSerializer(results, many=True)
+        serializer = FindingGroupResourceSerializer(
+            results, many=True, context=self.get_serializer_context()
+        )
         return Response(serializer.data)
 
     def _combined_paginated_response(
@@ -9224,7 +9233,9 @@ class FindingGroupViewSet(JsonApiFilterMixin, BaseRLSViewSet):
             orphan_results = self._post_process_orphans(ordered_rows)
 
         results = mapping_results + orphan_results
-        serializer = FindingGroupResourceSerializer(results, many=True)
+        serializer = FindingGroupResourceSerializer(
+            results, many=True, context=self.get_serializer_context()
+        )
         if page is not None:
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)

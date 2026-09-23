@@ -2,7 +2,7 @@
 
 import { type ComponentProps, useState } from "react";
 
-import { Button } from "@/components/shadcn";
+import { Button, Textarea } from "@/components/shadcn";
 import { Modal } from "@/components/shadcn/modal";
 import {
   Select,
@@ -50,11 +50,13 @@ function TriageStatusPicker({
   size = "sm",
   value,
   onValueChange,
+  canManageExceptions = true,
 }: {
   disabled: boolean;
   size?: TriageStatusPickerSize;
   value: FindingTriageStatus;
   onValueChange: (status: FindingTriageManualStatus) => void;
+  canManageExceptions?: boolean;
 }) {
   return (
     <Select
@@ -77,7 +79,9 @@ function TriageStatusPicker({
         </span>
       </SelectTrigger>
       <SelectContent>
-        {FINDING_TRIAGE_MANUAL_STATUS_VALUES.map((status) => (
+        {FINDING_TRIAGE_MANUAL_STATUS_VALUES.filter(
+          (status) => canManageExceptions || !isMutelistShortcutStatus(status),
+        ).map((status) => (
           <SelectItem key={status} value={status}>
             <span className={cn("truncate", TRIAGE_STATUS_TEXT_CLASS[status])}>
               {FINDING_TRIAGE_STATUS_LABELS[status]}
@@ -114,6 +118,7 @@ export function FindingTriageStatusControl(
   const [pendingShortcutStatus, setPendingShortcutStatus] =
     useState<FindingTriageManualStatus | null>(null);
   const triage = props.triage;
+  const [reason, setReason] = useState("");
 
   if (props.origin === FINDING_TRIAGE_ORIGIN.MODAL) {
     return (
@@ -121,6 +126,7 @@ export function FindingTriageStatusControl(
         disabled={!triage.canEdit || isTriageStatusLocked(triage.status)}
         value={props.value}
         onValueChange={props.onValueChange}
+        canManageExceptions={triage.canManageExceptions}
       />
     );
   }
@@ -148,18 +154,25 @@ export function FindingTriageStatusControl(
         status,
         previousStatus: triage.status,
         isMuted: triage.isMuted,
+        ...(triage.vrikaTriage && isMutelistShortcutStatus(status)
+          ? { reason: reason.trim(), confirmMute: true }
+          : {}),
       });
-    } catch {
-      setTableUpdateError("Could not update triage status.");
+    } catch (error) {
+      setTableUpdateError(
+        triage.vrikaTriage && error instanceof Error
+          ? error.message
+          : "Could not update triage status.",
+      );
     } finally {
       setIsTableUpdating(false);
     }
   };
 
   const shouldConfirmMute = (status: FindingTriageManualStatus) =>
-    !triage.isMuted &&
     isMutelistShortcutStatus(status) &&
-    !isMutelistShortcutStatus(triage.status);
+    (triage.vrikaTriage ||
+      (!triage.isMuted && !isMutelistShortcutStatus(triage.status)));
 
   const handleTableValueChange = (status: FindingTriageManualStatus) => {
     if (!props.onTriageUpdateAction || status === triage.status) {
@@ -167,6 +180,7 @@ export function FindingTriageStatusControl(
     }
 
     if (shouldConfirmMute(status)) {
+      setReason("");
       setPendingShortcutStatus(status);
       return;
     }
@@ -182,10 +196,11 @@ export function FindingTriageStatusControl(
           size="xs"
           value={triage.status}
           onValueChange={handleTableValueChange}
+          canManageExceptions={triage.canManageExceptions}
         />
       </div>
       {tableUpdateError && (
-        <span className="sr-only" role="alert">
+        <span className="text-text-error-primary text-xs" role="alert">
           {tableUpdateError}
         </span>
       )}
@@ -204,6 +219,15 @@ export function FindingTriageStatusControl(
         }
         size="sm"
       >
+        {triage.vrikaTriage && (
+          <Textarea
+            aria-label="Exception reason"
+            placeholder="Required reason (3-500 characters)"
+            value={reason}
+            maxLength={500}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button
             type="button"
@@ -214,6 +238,7 @@ export function FindingTriageStatusControl(
           </Button>
           <Button
             type="button"
+            disabled={triage.vrikaTriage && reason.trim().length < 3}
             onClick={() => {
               const status = pendingShortcutStatus;
               setPendingShortcutStatus(null);

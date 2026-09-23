@@ -5,11 +5,15 @@ import {
 
 interface FindingTriageAdapterOptions {
   canEdit: boolean;
+  vrikaTriage?: boolean;
   disabledReason?: FindingTriageDisabledReason;
 }
 
 export function getFindingTriageAdapterOptions(): FindingTriageAdapterOptions {
   const isCloudEnvironment = process.env.NEXT_PUBLIC_IS_CLOUD_ENV === "true";
+  if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+    return { canEdit: false, vrikaTriage: true };
+  }
 
   return {
     canEdit: isCloudEnvironment,

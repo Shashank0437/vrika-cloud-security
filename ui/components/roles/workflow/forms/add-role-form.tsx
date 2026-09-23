@@ -21,6 +21,8 @@ export const AddRoleForm = ({ groups }: { groups: RoleGroupOption[] }) => {
     manage_providers: false,
     manage_integrations: false,
     manage_scans: false,
+    manage_triage: false,
+    manage_triage_exceptions: false,
     unlimited_visibility: false,
     groups: [],
     ...(isCloudEnvironment && {
@@ -40,6 +42,13 @@ export const AddRoleForm = ({ groups }: { groups: RoleGroupOption[] }) => {
     formData.append("manage_providers", String(values.manage_providers));
     formData.append("manage_integrations", String(values.manage_integrations));
     formData.append("manage_scans", String(values.manage_scans));
+    if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+      formData.append("manage_triage", String(values.manage_triage));
+      formData.append(
+        "manage_triage_exceptions",
+        String(values.manage_triage_exceptions),
+      );
+    }
     formData.append("manage_account", String(values.manage_account));
     formData.append(
       "unlimited_visibility",

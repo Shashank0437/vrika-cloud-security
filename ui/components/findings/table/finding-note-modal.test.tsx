@@ -1,8 +1,16 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { loadHistory } = vi.hoisted(() => ({ loadHistory: vi.fn() }));
+vi.mock("@/actions/findings/findings-triage", () => ({
+  loadFindingTriageHistory: loadHistory,
+}));
+
+beforeEach(() => {
+  loadHistory.mockResolvedValue({ events: [], hasNext: false });
+});
 vi.mock("@/components/icons/providers-badge/provider-type-icon", () => ({
   ProviderTypeIcon: ({ type }: { type: string }) => (
     <span data-testid={`${type}-provider-badge`}>{type} icon</span>
@@ -112,6 +120,78 @@ function renderNoteModal({
 }
 
 describe("FindingNoteModal", () => {
+  it("shows history loading and then an explicit load error", async () => {
+    let rejectHistory: (reason: Error) => void = () => {};
+    loadHistory.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectHistory = reject;
+        }),
+    );
+    renderNoteModal({ triage: makeTriageDetail({ vrikaTriage: true }) });
+    expect(screen.getByRole("status")).toHaveTextContent("Loading history...");
+    await waitFor(() => expect(loadHistory).toHaveBeenCalled());
+    rejectHistory(new Error("History is unavailable"));
+    expect(await screen.findByText("History is unavailable")).toBeVisible();
+  });
+
+  it("shows history to read-only Vrika users without enabling edits", async () => {
+    renderNoteModal({
+      triage: makeTriageDetail({ vrikaTriage: true, canEdit: false }),
+    });
+    expect(
+      screen.getByRole("region", { name: "Triage history" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Note text" })).toBeDisabled();
+    await waitFor(() =>
+      expect(
+        screen.getByText("No triage changes recorded."),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("hides exception statuses for members", async () => {
+    const user = userEvent.setup();
+    renderNoteModal({
+      triage: makeTriageDetail({
+        vrikaTriage: true,
+        canManageExceptions: false,
+      }),
+    });
+    await user.click(screen.getByRole("combobox", { name: "Triage status" }));
+    expect(
+      screen.queryByRole("option", { name: "Risk Accepted" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "False Positive" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("requires a reason and explicit confirmation for admin exceptions", async () => {
+    const user = userEvent.setup();
+    const { onTriageUpdateAction } = renderNoteModal({
+      triage: makeTriageDetail({
+        vrikaTriage: true,
+        canManageExceptions: true,
+      }),
+    });
+    await user.click(screen.getByRole("combobox", { name: "Triage status" }));
+    await user.click(screen.getByRole("option", { name: "Risk Accepted" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.type(
+      screen.getByRole("textbox", { name: "Exception reason" }),
+      "Approved exception",
+    );
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onTriageUpdateAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "risk_accepted",
+        reason: "Approved exception",
+        confirmMute: true,
+      }),
+    );
+  });
   it("should render the provider badge from the row provider type", () => {
     // Given / When
     renderNoteModal({

@@ -1408,6 +1408,8 @@ class Role(RowLevelSecurityProtectedModel):
     manage_providers = models.BooleanField(default=False)
     manage_integrations = models.BooleanField(default=False)
     manage_scans = models.BooleanField(default=False)
+    manage_triage = models.BooleanField(default=False)
+    manage_triage_exceptions = models.BooleanField(default=False)
     unlimited_visibility = models.BooleanField(default=False)
     inserted_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
@@ -1429,6 +1431,8 @@ class Role(RowLevelSecurityProtectedModel):
         "manage_providers",
         "manage_integrations",
         "manage_scans",
+        "manage_triage",
+        "manage_triage_exceptions",
     ]
 
     @property
@@ -2608,6 +2612,103 @@ class MuteRule(RowLevelSecurityProtectedModel):
 
     class JSONAPIMeta:
         resource_name = "mute-rules"
+
+
+class FindingTriage(RowLevelSecurityProtectedModel):
+    class Status(models.TextChoices):
+        OPEN = "open", _("Open")
+        UNDER_REVIEW = "under_review", _("Under Review")
+        REMEDIATING = "remediating", _("Remediating")
+        RESOLVED = "resolved", _("Resolved")
+        REOPENED = "reopened", _("Reopened")
+        RISK_ACCEPTED = "risk_accepted", _("Risk Accepted")
+        FALSE_POSITIVE = "false_positive", _("False Positive")
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    provider = models.ForeignKey(Provider, on_delete=models.CASCADE)
+    finding_uid = models.CharField(max_length=300)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.OPEN
+    )
+    last_result = models.CharField(max_length=4, blank=True)
+    last_scan_id = models.UUIDField(null=True, blank=True)
+    last_scan_started_at = models.DateTimeField(null=True, blank=True)
+    inserted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(RowLevelSecurityProtectedModel.Meta):
+        db_table = "finding_triages"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant_id", "provider", "finding_uid"],
+                name="unique_provider_finding_triage",
+            ),
+            RowLevelSecurityConstraint(
+                field="tenant_id",
+                name="rls_on_%(class)s",
+                statements=["SELECT", "INSERT", "UPDATE", "DELETE"],
+            ),
+        ]
+
+    class JSONAPIMeta:
+        resource_name = "finding-triages"
+
+
+class FindingTriageNote(RowLevelSecurityProtectedModel):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    triage = models.OneToOneField(
+        FindingTriage, on_delete=models.CASCADE, related_name="note"
+    )
+    body = models.CharField(max_length=500)
+    created_by = models.ForeignKey(
+        User, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_by = models.ForeignKey(
+        User, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    inserted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(RowLevelSecurityProtectedModel.Meta):
+        db_table = "finding_triage_notes"
+        constraints = [
+            RowLevelSecurityConstraint(
+                field="tenant_id",
+                name="rls_on_%(class)s",
+                statements=["SELECT", "INSERT", "UPDATE", "DELETE"],
+            ),
+        ]
+
+    class JSONAPIMeta:
+        resource_name = "finding-triage-notes"
+
+
+class FindingTriageEvent(RowLevelSecurityProtectedModel):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    triage = models.ForeignKey(
+        FindingTriage, on_delete=models.CASCADE, related_name="events"
+    )
+    actor = models.ForeignKey(
+        User, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    kind = models.CharField(max_length=20)
+    changes = models.JSONField(default=dict)
+    scan_id = models.UUIDField(null=True, blank=True)
+    inserted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta(RowLevelSecurityProtectedModel.Meta):
+        db_table = "finding_triage_events"
+        ordering = ["-inserted_at", "-id"]
+        constraints = [
+            RowLevelSecurityConstraint(
+                field="tenant_id",
+                name="rls_on_%(class)s",
+                statements=["SELECT", "INSERT", "UPDATE", "DELETE"],
+            ),
+        ]
+
+    class JSONAPIMeta:
+        resource_name = "finding-triage-events"
 
 
 class Processor(RowLevelSecurityProtectedModel):

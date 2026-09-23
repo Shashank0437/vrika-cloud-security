@@ -32,6 +32,7 @@ declare global {
 
       // Build-time public config
       NEXT_PUBLIC_IS_CLOUD_ENV?: "true" | "false";
+      NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED?: "true" | "false";
       NEXT_PUBLIC_PROWLER_RELEASE_VERSION?: string;
 
       // Auth (NextAuth)

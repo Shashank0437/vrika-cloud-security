@@ -54,6 +54,11 @@ export const EditRoleForm = ({
       updatedFields.manage_account = values.manage_account;
       updatedFields.manage_integrations = values.manage_integrations;
       updatedFields.manage_scans = values.manage_scans;
+      if (process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true") {
+        updatedFields.manage_triage = values.manage_triage;
+        updatedFields.manage_triage_exceptions =
+          values.manage_triage_exceptions;
+      }
       updatedFields.unlimited_visibility = values.unlimited_visibility;
 
       if (isCloudEnvironment) {

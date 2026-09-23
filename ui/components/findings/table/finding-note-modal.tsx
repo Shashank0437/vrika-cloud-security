@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, Info } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ProviderTypeIcon } from "@/components/icons/providers-badge/provider-type-icon";
 import { Alert, AlertDescription, Button, Textarea } from "@/components/shadcn";
@@ -18,7 +18,9 @@ import {
   FINDING_TRIAGE_ORIGIN,
   FINDING_TRIAGE_RESOLVED_LOCKED_COPY,
   FINDING_TRIAGE_STATUS,
+  FINDING_TRIAGE_STATUS_LABELS,
   type FindingTriageDetail,
+  type FindingTriageEvent,
   type FindingTriageStatus,
   getFindingTriageMuteInfoCopy,
   isMutelistShortcutStatus,
@@ -64,6 +66,45 @@ export function FindingNoteModal({
   const [note, setNote] = useState(triage.noteBody);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [history, setHistory] = useState<FindingTriageEvent[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [loadedHistoryPage, setLoadedHistoryPage] = useState<number | null>(
+    null,
+  );
+  const historyLoading = !historyError && loadedHistoryPage !== historyPage;
+  useEffect(() => {
+    if (!triage.vrikaTriage || !open) return;
+    let active = true;
+    import("@/actions/findings/findings-triage")
+      .then(({ loadFindingTriageHistory }) =>
+        loadFindingTriageHistory(triage, historyPage),
+      )
+      .then(
+        (result) => {
+          if (active) {
+            setHistory(result.events);
+            setHasNext(result.hasNext);
+            setHistoryError(null);
+            setLoadedHistoryPage(historyPage);
+          }
+        },
+        (error: unknown) => {
+          if (active)
+            setHistoryError(
+              error instanceof Error
+                ? error.message
+                : "Could not load history.",
+            );
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [triage, open, historyPage]);
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const canSubmit =
     triage.canEdit && Boolean(onTriageUpdateAction) && !isSubmitting;
@@ -77,6 +118,10 @@ export function FindingNoteModal({
   const shouldShowRemediatingInfo =
     selectedStatus === FINDING_TRIAGE_STATUS.REMEDIATING;
   const isStatusLocked = isTriageStatusLocked(triage.status);
+  const requiresExceptionReason =
+    triage.vrikaTriage &&
+    selectedStatus !== triage.status &&
+    isMutelistShortcutStatus(selectedStatus);
   // Opened from a dropdown item: move focus into the dialog on mount so Radix's
   // aria-hidden is not applied to the still-focused dropdown that opened it.
   const handleOpenAutoFocus = (event: Event) => {
@@ -110,10 +155,24 @@ export function FindingNoteModal({
         return;
       }
 
+      if (requiresExceptionReason) {
+        if (!confirmed || reason.trim().length < 3) {
+          setSubmitError(
+            "Confirm muting and provide a reason of 3-500 characters.",
+          );
+          return;
+        }
+        updateInput.reason = reason.trim();
+        updateInput.confirmMute = true;
+      }
       await onTriageUpdateAction?.(updateInput);
       onOpenChange(false);
-    } catch {
-      setSubmitError("Could not update the note. Please try again.");
+    } catch (error) {
+      setSubmitError(
+        triage.vrikaTriage && error instanceof Error
+          ? error.message
+          : "Could not update the note. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -124,7 +183,7 @@ export function FindingNoteModal({
       open={open}
       onOpenChange={onOpenChange}
       onOpenAutoFocus={handleOpenAutoFocus}
-      title="Add Triage Note"
+      title={triage.vrikaTriage ? "Finding Triage" : "Add Triage Note"}
       size="lg"
     >
       {/* min-w-0: the form is a grid item of DialogContent; without it, long
@@ -204,6 +263,25 @@ export function FindingNoteModal({
             </AlertDescription>
           </Alert>
         )}
+        {requiresExceptionReason && (
+          <div className="space-y-2">
+            <Textarea
+              aria-label="Exception reason"
+              placeholder="Required reason (3-500 characters)"
+              value={reason}
+              maxLength={500}
+              onChange={(event) => setReason(event.target.value)}
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              I confirm this exception and muting the finding.
+            </label>
+          </div>
+        )}
 
         {shouldShowRemediatingInfo && (
           <Alert variant="info">
@@ -235,6 +313,79 @@ export function FindingNoteModal({
           </div>
         </div>
 
+        {triage.vrikaTriage && (
+          <section className="space-y-2" aria-label="Triage history">
+            <h3 className="font-semibold">History</h3>
+            <p className="text-text-neutral-secondary text-xs">
+              Changes are recorded for your organization. Clearing a note does
+              not erase its history. Returning to Open does not remove an
+              existing Mutelist rule.
+            </p>
+            {historyLoading ? (
+              <p role="status">Loading history...</p>
+            ) : historyError ? (
+              <p role="alert">{historyError}</p>
+            ) : history.length === 0 ? (
+              <p className="text-sm">No triage changes recorded.</p>
+            ) : (
+              history.map((event) => (
+                <div
+                  key={event.id}
+                  className="border-border-input-primary border-b py-2 text-sm"
+                >
+                  <p>
+                    {event.attributes.actor_name} ·{" "}
+                    {new Date(event.attributes.inserted_at).toLocaleString()}
+                  </p>
+                  {event.attributes.changes.status && (
+                    <p>
+                      {
+                        FINDING_TRIAGE_STATUS_LABELS[
+                          event.attributes.changes.status.from
+                        ]
+                      }{" "}
+                      →{" "}
+                      {
+                        FINDING_TRIAGE_STATUS_LABELS[
+                          event.attributes.changes.status.to
+                        ]
+                      }
+                    </p>
+                  )}
+                  {event.attributes.changes.reason && (
+                    <p className="break-words">
+                      {event.attributes.changes.reason}
+                    </p>
+                  )}
+                  {event.attributes.changes.note && (
+                    <p className="break-words whitespace-pre-wrap">
+                      Note: {event.attributes.changes.note.to || "(cleared)"}
+                    </p>
+                  )}
+                </div>
+              ))
+            )}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={historyLoading || historyPage === 1}
+                onClick={() => setHistoryPage((page) => page - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={historyLoading || !hasNext}
+                onClick={() => setHistoryPage((page) => page + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </section>
+        )}
+
         {/* mt-3 lifts the gap-5 form spacing to 32px so the distance to the
             footer matches the launch scan and alert modals. */}
         <div className="mt-3 flex w-full justify-between gap-4">
@@ -255,7 +406,13 @@ export function FindingNoteModal({
             <Button
               type={canSubmit ? "submit" : "button"}
               size="lg"
-              disabled={!canSubmit}
+              disabled={
+                !canSubmit ||
+                Boolean(
+                  requiresExceptionReason &&
+                    (!confirmed || reason.trim().length < 3),
+                )
+              }
             >
               {isSubmitting
                 ? "Saving..."

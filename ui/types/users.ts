@@ -61,6 +61,8 @@ export type PermissionKey =
   | "manage_account"
   | "manage_providers"
   | "manage_scans"
+  | "manage_triage"
+  | "manage_triage_exceptions"
   | "manage_integrations"
   | "manage_billing"
   | "manage_alerts"
@@ -88,6 +90,8 @@ export interface RoleDetail {
     manage_account: boolean;
     manage_providers: boolean;
     manage_scans: boolean;
+    manage_triage?: boolean;
+    manage_triage_exceptions?: boolean;
     manage_integrations: boolean;
     manage_billing?: boolean;
     manage_alerts?: boolean;

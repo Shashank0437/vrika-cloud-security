@@ -397,6 +397,10 @@ def _perform_scan_complete_tasks(tenant_id: str, scan_id: str, provider_id: str)
         scan_id (str): The ID of the scan that was performed.
         provider_id (str): The primary key of the Provider instance that was scanned.
     """
+    from django.conf import settings
+
+    if settings.VRIKA_TRIAGE_ENABLED:
+        reconcile_finding_triage_task.delay(tenant_id=tenant_id, scan_id=scan_id)
     chain(
         create_compliance_requirements_task.si(tenant_id=tenant_id, scan_id=scan_id),
         update_provider_compliance_scores_task.si(tenant_id=tenant_id, scan_id=scan_id),
@@ -699,6 +703,13 @@ def perform_scheduled_scan_task(
 @handle_provider_deletion
 def perform_scan_summary_task(tenant_id: str, scan_id: str):
     return aggregate_findings(tenant_id=tenant_id, scan_id=scan_id)
+
+
+@shared_task(base=RLSTask, name="scan-finding-triage", queue="overview")
+def reconcile_finding_triage_task(tenant_id: str, scan_id: str):
+    from api.triage import reconcile_scan_triage
+
+    return reconcile_scan_triage(tenant_id, scan_id)
 
 
 class AttackPathsScanRLSTask(RLSTask):
@@ -1626,7 +1637,6 @@ def share_vrika_scan_email_task(tenant_id: str, scan_id: str, provider_id: str):
         scan_id=scan_id,
         provider_id=provider_id,
     )
-
 
 
 @shared_task(name="findings-mute-historical")

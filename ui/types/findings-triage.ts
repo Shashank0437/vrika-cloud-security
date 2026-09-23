@@ -93,6 +93,8 @@ export interface FindingTriageSummary {
   hasVisibleNote: boolean;
   isMuted: boolean;
   canEdit: boolean;
+  canManageExceptions?: boolean;
+  vrikaTriage?: boolean;
   disabledReason?: FindingTriageDisabledReason;
   billingHref: string;
 }
@@ -113,6 +115,36 @@ export interface UpdateFindingTriageInput {
   previousStatus?: FindingTriageStatus;
   isMuted?: boolean;
   note?: string;
+  reason?: string;
+  confirmMute?: boolean;
+}
+
+interface TriageChange<T> {
+  from: T;
+  to: T;
+}
+
+interface FindingTriageChanges {
+  status?: TriageChange<FindingTriageStatus>;
+  note?: TriageChange<string>;
+  reason?: string;
+}
+
+interface FindingTriageEventAttributes {
+  kind: string;
+  actor_name: string;
+  inserted_at: string;
+  changes: FindingTriageChanges;
+}
+
+export interface FindingTriageEvent {
+  id: string;
+  attributes: FindingTriageEventAttributes;
+}
+
+export interface FindingTriageHistory {
+  events: FindingTriageEvent[];
+  hasNext: boolean;
 }
 
 export interface FindingTriageLoadedNote {

@@ -106,4 +106,36 @@ describe("role actions", () => {
     // Then
     expect(lastRequestBody().data.attributes.manage_alerts).toBe(true);
   });
+
+  it("sends triage permissions without enabling cloud alert permissions", async () => {
+    vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "true");
+    const formData = makeRoleFormData();
+    formData.set("manage_triage", "true");
+    formData.set("manage_triage_exceptions", "false");
+    for (const save of [
+      () => addRole(formData),
+      () => updateRole(formData, "role-1"),
+    ]) {
+      await save();
+      expect(lastRequestBody().data.attributes).toMatchObject({
+        manage_triage: true,
+        manage_triage_exceptions: false,
+      });
+      expect(lastRequestBody().data.attributes).not.toHaveProperty(
+        "manage_alerts",
+      );
+    }
+  });
+
+  it("does not overwrite triage grants when its UI feature is disabled", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "false");
+    await updateRole(makeRoleFormData(), "role-1");
+    expect(lastRequestBody().data.attributes).not.toHaveProperty(
+      "manage_triage",
+    );
+    expect(lastRequestBody().data.attributes).not.toHaveProperty(
+      "manage_triage_exceptions",
+    );
+  });
 });
