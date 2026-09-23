@@ -9,6 +9,7 @@ import {
 } from "@sentry/nextjs";
 
 import { getAuthContext } from "@/lib/lighthouse-v1/auth-context";
+import { getCanonicalToolName } from "@/lib/lighthouse-v1/tool-policy";
 import { SentryErrorSource, SentryErrorType } from "@/sentry";
 
 /** Maximum number of retry attempts for MCP connection */
@@ -89,7 +90,7 @@ class MCPClientManager {
   }) => {
     // Only inject auth for Prowler App tools (user-specific data)
     // Prowler Hub and Prowler Docs tools don't require authentication
-    if (!name.startsWith("prowler_app_")) {
+    if (!getCanonicalToolName(name).startsWith("prowler_app_")) {
       return { args };
     }
 
@@ -244,11 +245,20 @@ class MCPClientManager {
   }
 
   getToolByName(name: string): StructuredTool | undefined {
-    return this.tools.find((tool) => tool.name === name);
+    return (
+      this.tools.find((tool) => tool.name === name) ??
+      this.tools.find(
+        (tool) =>
+          getCanonicalToolName(tool.name) === getCanonicalToolName(name),
+      )
+    );
   }
 
   getToolsByNames(names: string[]): StructuredTool[] {
-    return this.tools.filter((tool) => names.includes(tool.name));
+    const canonicalNames = new Set(names.map(getCanonicalToolName));
+    return this.tools.filter((tool) =>
+      canonicalNames.has(getCanonicalToolName(tool.name)),
+    );
   }
 
   isAvailable(): boolean {

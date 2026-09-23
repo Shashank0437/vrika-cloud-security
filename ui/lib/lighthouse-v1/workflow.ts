@@ -4,6 +4,7 @@ import {
   getProviderCredentials,
   getTenantConfig,
 } from "@/actions/lighthouse-v1/lighthouse";
+import { createAgentBudget } from "@/lib/lighthouse-v1/agent-budget";
 import { TOOLS_UNAVAILABLE_MESSAGE } from "@/lib/lighthouse-v1/constants";
 import type { ProviderType } from "@/lib/lighthouse-v1/llm-factory";
 import { createLLM } from "@/lib/lighthouse-v1/llm-factory";
@@ -18,6 +19,10 @@ import {
   generateUserDataSection,
   LIGHTHOUSE_SYSTEM_PROMPT_TEMPLATE,
 } from "@/lib/lighthouse-v1/system-prompt";
+import {
+  getCanonicalToolName,
+  isAllowedTool,
+} from "@/lib/lighthouse-v1/tool-policy";
 import { loadSkill } from "@/lib/lighthouse-v1/tools/load-skill";
 import { describeTool, executeTool } from "@/lib/lighthouse-v1/tools/meta-tool";
 import { getModelParams } from "@/lib/lighthouse-v1/utils";
@@ -68,67 +73,6 @@ function truncateDescription(desc: string | undefined, maxLen: number): string {
 }
 
 /**
- * Tools explicitly allowed for the LLM to list and execute.
- * Follows the principle of least privilege - only these tools are accessible.
- * All other tools are blocked by default.
- */
-const ALLOWED_TOOLS = new Set([
-  // === Prowler Hub Tools - read-only ===
-  "prowler_hub_list_checks",
-  "prowler_hub_semantic_search_checks",
-  "prowler_hub_get_check_details",
-  "prowler_hub_get_check_code",
-  "prowler_hub_get_check_fixer",
-  "prowler_hub_list_compliances",
-  "prowler_hub_semantic_search_compliances",
-  "prowler_hub_get_compliance_details",
-  "prowler_hub_list_providers",
-  "prowler_hub_get_provider_services",
-  // === Prowler Docs Tools - read-only ===
-  "prowler_docs_search",
-  "prowler_docs_get_document",
-  // === Prowler App Tools - read-only ===
-  // Findings
-  "prowler_app_search_security_findings",
-  "prowler_app_get_finding_details",
-  "prowler_app_get_findings_overview",
-  // Finding Groups
-  "prowler_app_list_finding_groups",
-  "prowler_app_get_finding_group_details",
-  "prowler_app_list_finding_group_resources",
-  // Providers
-  "prowler_app_search_providers",
-  // Scans
-  "prowler_app_list_scans",
-  "prowler_app_get_scan",
-  // Muting
-  "prowler_app_get_mutelist",
-  "prowler_app_list_mute_rules",
-  "prowler_app_get_mute_rule",
-  // Compliance
-  "prowler_app_get_compliance_overview",
-  "prowler_app_get_compliance_framework_state_details",
-  // Resources
-  "prowler_app_list_resources",
-  "prowler_app_get_resource",
-  "prowler_app_get_resource_events",
-  "prowler_app_get_resources_overview",
-  // Attack Paths
-  "prowler_app_list_attack_paths_queries",
-  "prowler_app_list_attack_paths_scans",
-  "prowler_app_run_attack_paths_query",
-  "prowler_app_get_attack_paths_cartography_schema",
-]);
-
-/**
- * Check if a tool is allowed for LLM access.
- * Returns true only if the tool is explicitly in the whitelist.
- */
-export function isAllowedTool(toolName: string): boolean {
-  return ALLOWED_TOOLS.has(toolName);
-}
-
-/**
  * Generate dynamic tool listing from MCP tools.
  * Only includes tools that are explicitly whitelisted.
  */
@@ -151,7 +95,7 @@ function generateToolListing(): string {
 
   for (const tool of safeTools) {
     const desc = truncateDescription(tool.description, 150);
-    listing += `- **${tool.name}**: ${desc}\n`;
+    listing += `- **${getCanonicalToolName(tool.name)}**: ${desc}\n`;
   }
 
   listing +=
@@ -233,7 +177,8 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
   }
 
   let effectiveKey = readApiKey(credentials);
-  const isLocalCustom = providerType === "openai_compatible" || Boolean(baseUrl);
+  const isLocalCustom =
+    providerType === "openai_compatible" || Boolean(baseUrl);
   if (!effectiveKey && isLocalCustom) {
     effectiveKey = "local";
     credentials = { api_key: "local" };
@@ -271,6 +216,7 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
     model: llm,
     tools: [describeTool, executeTool, loadSkill],
     systemPrompt,
+    middleware: [createAgentBudget()],
   });
 
   return agent;

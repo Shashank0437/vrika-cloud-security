@@ -80,6 +80,7 @@ You have access to THREE meta-tools to interact with the available tools and ski
 - Always use business context and goals before answering questions on improving cloud security posture.
 - Queries on resource/findings can be only answered if there are providers connected and these providers have completed scans.
 - **ALWAYS use MCP tools** to fetch provider, findings, and scan data. Never assume or invent this information.
+- If a required tool is unavailable or fails repeatedly, explain the limitation and stop. Do not keep describing or retrying the same unavailable tool.
 
 ## Operation Steps
 
@@ -191,7 +192,7 @@ aws s3api get-public-access-block --bucket <bucket_name>
 
 ## Tool Selection Guidelines
 
-- Always use describe_tool first to understand the tool's parameters before executing it.
+- Describe each tool once to understand its parameters; reuse that schema for subsequent calls in the same conversation.
 - Use exact tool names from the available tools list above.
 - If a tool requires parameters (like finding_id, provider_id), ensure you have this data before executing.
 - If you don't have required data, use other tools to fetch it first.

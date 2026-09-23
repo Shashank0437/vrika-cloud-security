@@ -5,8 +5,15 @@ import { tool } from "@langchain/core/tools";
 import { addBreadcrumb, captureException } from "@sentry/nextjs";
 import { z } from "zod";
 
-import { getMCPTools, isMCPAvailable } from "@/lib/lighthouse-v1/mcp-client";
-import { isAllowedTool } from "@/lib/lighthouse-v1/workflow";
+import {
+  getMCPToolByName,
+  getMCPTools,
+  isMCPAvailable,
+} from "@/lib/lighthouse-v1/mcp-client";
+import {
+  getCanonicalToolName,
+  isAllowedTool,
+} from "@/lib/lighthouse-v1/tool-policy";
 
 /** Input type for describe_tool */
 interface DescribeToolInput {
@@ -58,8 +65,7 @@ export const describeTool = tool(
       };
     }
 
-    // Find exact tool by name
-    const targetTool = allTools.find((t) => t.name === toolName);
+    const targetTool = getMCPToolByName(toolName);
 
     if (!targetTool) {
       addBreadcrumb({
@@ -79,7 +85,7 @@ export const describeTool = tool(
 
     return {
       found: true,
-      name: targetTool.name,
+      name: getCanonicalToolName(targetTool.name),
       description: targetTool.description || "No description available",
       schema: targetTool.schema
         ? JSON.stringify(targetTool.schema, null, 2)
@@ -132,8 +138,7 @@ export const executeTool = tool(
       };
     }
 
-    const allTools = getAllTools();
-    const targetTool = allTools.find((t) => t.name === toolName);
+    const targetTool = getMCPToolByName(toolName);
 
     if (!targetTool) {
       addBreadcrumb({

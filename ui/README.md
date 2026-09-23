@@ -112,6 +112,20 @@ prek install
 pnpm run dev
 ```
 
+## Lighthouse / Vrika AI tool compatibility
+
+The AI supports both `prowler_app_*` and `prowler_*` App tool names from MCP
+releases. It presents canonical `prowler_app_*` names to the model, resolves
+them to the server's original wire names, and forwards the current request's
+authentication for both variants. Only explicitly allowlisted read-only tools
+are eligible for aliases; write tools remain blocked.
+
+Each question permits eight tool rounds, followed by a tools-disabled final
+answer using the evidence already retrieved. Incomplete results must be
+identified as such. A model that still requests tools is stopped with an
+actionable error instead of reaching LangGraph's default 25-step recursion
+limit. The budget resets for each new user question.
+
 ## Technologies Used
 
 - [Next.js 16](https://nextjs.org/docs/getting-started)
