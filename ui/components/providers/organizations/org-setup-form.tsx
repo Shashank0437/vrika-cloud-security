@@ -281,7 +281,7 @@ export function OrgSetupForm({
 
             <p className="text-muted-foreground text-sm">
               Enter the Organization ID for the accounts you want to add to
-              Prowler.
+              Vrika.
             </p>
           </div>
         )}
@@ -341,8 +341,7 @@ export function OrgSetupForm({
             />
 
             <p className="text-muted-foreground text-sm">
-              If left blank, Prowler will use the Organization name stored in
-              AWS.
+              If left blank, Vrika will use the Organization name stored in AWS.
             </p>
           </div>
         )}

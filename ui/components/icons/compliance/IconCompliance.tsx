@@ -1,3 +1,5 @@
+import { withAppPath } from "@/lib/base-path";
+
 import ANSSILogo from "./anssi.png";
 import ASDEssentialEightLogo from "./asd-essential-eight.svg";
 import AWSLogo from "./aws.svg";
@@ -20,9 +22,10 @@ import NIS2Logo from "./nis2.svg";
 import NISTLogo from "./nist.svg";
 import OktaLogo from "./okta.svg";
 import PCILogo from "./pci-dss.svg";
-import PROWLERTHREATLogo from "./prowlerThreat.svg";
 import RBILogo from "./rbi.svg";
 import SOC2Logo from "./soc2.svg";
+
+const PROWLERTHREATLogo = withAppPath("/vrika-mark.png");
 
 // Framework-specific keywords MUST come before the generic provider-level
 // `aws` keyword. `getComplianceIcon` resolves by substring `includes`, and

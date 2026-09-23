@@ -3,6 +3,7 @@
 import Image from "next/image";
 
 import { DataTableFilterCustom } from "@/components/shadcn/table/data-table-filter-custom";
+import { brandText } from "@/lib/branding";
 import { ScanEntity } from "@/types/scans";
 
 import { ComplianceScanInfo } from "./compliance-scan-info";
@@ -84,7 +85,7 @@ export const ComplianceHeader = ({
                 <div className="relative h-12 w-12 shrink-0">
                   <Image
                     src={logoPath}
-                    alt={`${complianceTitle} logo`}
+                    alt={`${brandText(complianceTitle)} logo`}
                     fill
                     className="rounded-lg border border-gray-300 bg-white object-contain p-0"
                   />

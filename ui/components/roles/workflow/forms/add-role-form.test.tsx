@@ -94,7 +94,7 @@ describe("AddRoleForm", () => {
     vi.unstubAllEnvs();
   });
 
-  it("shows Manage Alerts in Prowler Cloud", () => {
+  it("shows Manage Alerts in Vrika Cloud", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
 
@@ -106,7 +106,7 @@ describe("AddRoleForm", () => {
     expect(screen.getByText("Manage Billing")).toBeInTheDocument();
   });
 
-  it("hides Manage Alerts outside Prowler Cloud", () => {
+  it("hides Manage Alerts outside Vrika Cloud", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
 

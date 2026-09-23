@@ -375,7 +375,7 @@ describe("finding triage cells", () => {
     expect(screen.getByLabelText("Note text")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     expect(
-      screen.getByRole("link", { name: "Available in Prowler Cloud" }),
+      screen.getByRole("link", { name: "Available in Vrika Cloud" }),
     ).toHaveAttribute("href", "https://prowler.com/pricing");
   });
 

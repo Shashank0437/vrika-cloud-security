@@ -1011,11 +1011,11 @@ describe("ResourceDetailDrawerContent — CVE recommendation button", () => {
     );
     expect(screen.getByText(statusExtendedWithFixVersions)).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "View in Prowler Hub" }),
+      screen.queryByRole("link", { name: "View in Vrika Hub" }),
     ).not.toBeInTheDocument();
   });
 
-  it("should show View in Prowler Hub when the recommendation URL points to Prowler Hub", () => {
+  it("should show View in Vrika Hub when the recommendation URL points to Vrika Hub", () => {
     const hubCheckMeta: CheckMeta = {
       ...mockCheckMeta,
       remediation: {
@@ -1054,7 +1054,7 @@ describe("ResourceDetailDrawerContent — CVE recommendation button", () => {
     );
 
     expect(screen.getByText(statusExtendedWithFixVersions)).toBeInTheDocument();
-    const hubLink = screen.getByRole("link", { name: "View in Prowler Hub" });
+    const hubLink = screen.getByRole("link", { name: "View in Vrika Hub" });
     expect(hubLink).toHaveAttribute(
       "href",
       "https://hub.prowler.com/check/image_vulnerability",

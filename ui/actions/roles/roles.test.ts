@@ -72,7 +72,7 @@ describe("role actions", () => {
     vi.unstubAllEnvs();
   });
 
-  it("includes manage_alerts when creating a role in Prowler Cloud", async () => {
+  it("includes manage_alerts when creating a role in Vrika Cloud", async () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
 
@@ -83,7 +83,7 @@ describe("role actions", () => {
     expect(lastRequestBody().data.attributes.manage_alerts).toBe(true);
   });
 
-  it("omits manage_alerts when creating a role outside Prowler Cloud", async () => {
+  it("omits manage_alerts when creating a role outside Vrika Cloud", async () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
 
@@ -96,7 +96,7 @@ describe("role actions", () => {
     );
   });
 
-  it("includes manage_alerts when updating a role in Prowler Cloud", async () => {
+  it("includes manage_alerts when updating a role in Vrika Cloud", async () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
 

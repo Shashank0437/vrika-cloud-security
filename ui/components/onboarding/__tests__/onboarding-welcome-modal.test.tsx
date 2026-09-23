@@ -11,7 +11,7 @@ describe("OnboardingWelcomeModal", () => {
         <OnboardingWelcomeModal
           open
           flowTitle="Add your first provider"
-          flowDescription="Connect a cloud account so Prowler has something to scan."
+          flowDescription="Connect a cloud account so Vrika has something to scan."
           onAccept={vi.fn()}
           onDismiss={vi.fn()}
         />,
@@ -20,7 +20,7 @@ describe("OnboardingWelcomeModal", () => {
       expect(screen.getByText("Add your first provider")).toBeInTheDocument();
       expect(
         screen.getByText(
-          "Connect a cloud account so Prowler has something to scan.",
+          "Connect a cloud account so Vrika has something to scan.",
         ),
       ).toBeInTheDocument();
     });

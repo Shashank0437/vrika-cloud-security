@@ -74,7 +74,7 @@ describe("LaunchStep", () => {
     vi.unstubAllEnvs();
   });
 
-  describe("Prowler OSS (non-Cloud)", () => {
+  describe("Vrika OSS (non-Cloud)", () => {
     beforeEach(() => {
       vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
       scanOnDemandMock.mockResolvedValue({ data: { id: "scan-1" } });
@@ -172,7 +172,7 @@ describe("LaunchStep", () => {
     });
   });
 
-  describe("Prowler Cloud subscribed", () => {
+  describe("Vrika Cloud subscribed", () => {
     beforeEach(() => {
       vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
       updateScheduleMock.mockResolvedValue({ data: { id: "provider-1" } });
@@ -368,7 +368,7 @@ describe("LaunchStep", () => {
     });
   });
 
-  describe("Prowler Cloud trial/onboarding (manual scan only)", () => {
+  describe("Vrika Cloud trial/onboarding (manual scan only)", () => {
     beforeEach(() => {
       vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
       scanOnDemandMock.mockResolvedValue({ data: { id: "scan-1" } });

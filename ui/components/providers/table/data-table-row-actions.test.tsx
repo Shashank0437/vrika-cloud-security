@@ -390,7 +390,7 @@ describe("DataTableRowActions", () => {
     );
   });
 
-  it("opens Edit Scan Schedule for Prowler Cloud subscribed provider rows", async () => {
+  it("opens Edit Scan Schedule for Vrika Cloud subscribed provider rows", async () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
     const user = userEvent.setup();
@@ -525,7 +525,7 @@ describe("DataTableRowActions", () => {
     expect(item).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("hides Edit Scan Configuration for dynamic providers in Prowler Cloud", async () => {
+  it("hides Edit Scan Configuration for dynamic providers in Vrika Cloud", async () => {
     // Given a dynamic provider in a Cloud tenant with scan configs available.
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
     const user = userEvent.setup();

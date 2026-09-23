@@ -4,7 +4,11 @@
  */
 
 import { Copy, RotateCcw } from "lucide-react";
-import { defaultRehypePlugins, Streamdown } from "streamdown";
+import {
+  defaultRehypePlugins,
+  defaultRemarkPlugins,
+  Streamdown,
+} from "streamdown";
 
 import {
   Action,
@@ -19,6 +23,7 @@ import {
   MESSAGE_STATUS,
 } from "@/components/lighthouse-v1/chat-utils";
 import { Loader } from "@/components/lighthouse-v1/loader";
+import { remarkVrikaBranding } from "@/lib/branding";
 import { escapeAngleBracketPlaceholders } from "@/lib/markdown";
 
 interface MessageItemProps {
@@ -89,6 +94,10 @@ export function MessageItem({
                 // Assistant messages: render with markdown support
                 <div className="lighthouse-markdown">
                   <Streamdown
+                    remarkPlugins={[
+                      ...Object.values(defaultRemarkPlugins),
+                      remarkVrikaBranding,
+                    ]}
                     parseIncompleteMarkdown={true}
                     shikiTheme={["github-light", "github-dark"]}
                     controls={{

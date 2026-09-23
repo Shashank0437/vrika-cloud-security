@@ -229,7 +229,7 @@ describe("resolveNodeVisual", () => {
       expect(visual).toMatchObject({
         category: NODE_CATEGORY.FINDING,
         displayName: "S3 bucket is public",
-        description: "Prowler Finding",
+        description: "Vrika Finding",
         fallbackUsed: false,
       });
     });
@@ -256,7 +256,7 @@ describe("resolveNodeVisual", () => {
         // Then
         expect(visual).toMatchObject({
           category: NODE_CATEGORY.FINDING,
-          description: "Prowler Finding",
+          description: "Vrika Finding",
           fallbackUsed: false,
         });
         expect(visual.Icon).toBe(findingNode.Icon);

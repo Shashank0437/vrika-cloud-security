@@ -274,7 +274,7 @@ Mutelist:
           Tags:
             - "Name=aws-controltower-VPC"`;
 
-export const defaultScanConfigurationYaml = `# Override Prowler's per-tenant defaults below.
+export const defaultScanConfigurationYaml = `# Override Vrika's per-tenant defaults below.
 # Keep only the keys you want to change; the rest
 # use the built-in defaults from config.yaml.
 # Values are validated on save.

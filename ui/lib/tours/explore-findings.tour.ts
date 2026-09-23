@@ -25,7 +25,7 @@ export const exploreFindingsTour = defineTour<ExploreFindingsTourTarget>({
     {
       title: "Explore your findings",
       description:
-        "Findings are the issues Prowler detected across your scans, grouped so you can act on what matters most.",
+        "Findings are the issues Vrika detected across your scans, grouped so you can act on what matters most.",
     },
     {
       // `filters` renders immediately; `group` waits on Suspense — order matters.

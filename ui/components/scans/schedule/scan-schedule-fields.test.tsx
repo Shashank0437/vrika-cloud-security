@@ -107,15 +107,15 @@ describe("ScanScheduleFields", () => {
     );
 
     // Then
-    expect(screen.getAllByText("Available in Prowler Cloud")).toHaveLength(1);
+    expect(screen.getAllByText("Available in Vrika Cloud")).toHaveLength(1);
     expect(screen.getByText("Scan Schedule").parentElement).toHaveTextContent(
-      "Available in Prowler Cloud",
+      "Available in Vrika Cloud",
     );
     expect(screen.getByText("Scan Time").parentElement).not.toHaveTextContent(
-      "Available in Prowler Cloud",
+      "Available in Vrika Cloud",
     );
     expect(screen.getByText("Repeats").parentElement).not.toHaveTextContent(
-      "Available in Prowler Cloud",
+      "Available in Vrika Cloud",
     );
   });
 });

@@ -1,5 +1,10 @@
-import { defaultRehypePlugins, Streamdown } from "streamdown";
+import {
+  defaultRehypePlugins,
+  defaultRemarkPlugins,
+  Streamdown,
+} from "streamdown";
 
+import { remarkVrikaBranding } from "@/lib/branding";
 import { escapeAngleBracketPlaceholders } from "@/lib/markdown";
 
 // Renders assistant message text as markdown (code blocks, tables, lists),
@@ -14,6 +19,10 @@ export function MessageMarkdown({
   return (
     <div className="lighthouse-markdown max-w-full min-w-0 overflow-x-auto">
       <Streamdown
+        remarkPlugins={[
+          ...Object.values(defaultRemarkPlugins),
+          remarkVrikaBranding,
+        ]}
         parseIncompleteMarkdown
         shikiTheme={["github-light", "github-dark"]}
         controls={{ code: true, table: true, mermaid: true }}

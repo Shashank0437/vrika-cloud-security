@@ -20,7 +20,7 @@ describe("getRolePermissions", () => {
     vi.unstubAllEnvs();
   });
 
-  it("includes Manage Alerts in Prowler Cloud when role attributes provide it", () => {
+  it("includes Manage Alerts in Vrika Cloud when role attributes provide it", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
 
@@ -35,7 +35,7 @@ describe("getRolePermissions", () => {
     });
   });
 
-  it("hides Manage Alerts outside Prowler Cloud", () => {
+  it("hides Manage Alerts outside Vrika Cloud", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
 

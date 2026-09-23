@@ -348,7 +348,7 @@ describe("OrgLaunchScan", () => {
 
       // When
       await screen.findByText(
-        "Select a Prowler scan schedule for these accounts.",
+        "Select a Vrika scan schedule for these accounts.",
       );
       await act(async () => {
         lastFooterConfig(onFooterChange)?.onAction?.();

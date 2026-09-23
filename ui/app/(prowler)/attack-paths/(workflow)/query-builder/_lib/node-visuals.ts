@@ -564,7 +564,7 @@ export const resolveNodeVisual = (node: GraphNode): NodeVisual => {
     return {
       category: NODE_CATEGORY.FINDING,
       displayName: resolveFindingDisplayName(node),
-      description: "Prowler Finding",
+      description: "Vrika Finding",
       Icon: resolveFindingIcon(node),
       fallbackUsed: false,
     };

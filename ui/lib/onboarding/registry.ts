@@ -16,7 +16,7 @@ export const onboardingFlows: readonly OnboardingFlow[] = [
     order: 1,
     title: "Add your first provider",
     description:
-      "Connect a provider so Prowler has something to scan and assess.",
+      "Connect a provider so Vrika has something to scan and assess.",
     route: "/providers",
     tour: addProviderTour,
     // Server-derived: existing providers bypass this flow regardless of local record.
@@ -27,7 +27,7 @@ export const onboardingFlows: readonly OnboardingFlow[] = [
     order: 2,
     title: "Run your first scan",
     description:
-      "Launch a scan and watch Prowler assess your connected provider.",
+      "Launch a scan and watch Vrika assess your connected provider.",
     // Land on the In Progress tab so a running scan is the first thing the tour shows.
     route: "/scans?tab=active",
     tour: viewFirstScanTour,
@@ -36,7 +36,7 @@ export const onboardingFlows: readonly OnboardingFlow[] = [
     id: "explore-findings",
     order: 3,
     title: "Explore your findings",
-    description: "See what Prowler detected and how to fix it.",
+    description: "See what Vrika detected and how to fix it.",
     route: "/findings",
     tour: exploreFindingsTour,
     dataRequirementHint: SCAN_DATA_HINT,

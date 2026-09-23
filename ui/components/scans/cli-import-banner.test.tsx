@@ -44,7 +44,7 @@ describe("CliImportBanner", () => {
     render(<CliImportBanner />);
 
     expect(
-      screen.getByText(/Import findings from Prowler CLI/),
+      screen.getByText(/Import findings from Vrika CLI/),
     ).toBeInTheDocument();
   });
 
@@ -76,7 +76,7 @@ describe("CliImportBanner", () => {
     await user.click(closeButton);
 
     expect(
-      screen.queryByText(/Import findings from Prowler CLI/),
+      screen.queryByText(/Import findings from Vrika CLI/),
     ).not.toBeInTheDocument();
     expect(localStorageMock.setItem).toHaveBeenCalledWith(STORAGE_KEY, "true");
   });

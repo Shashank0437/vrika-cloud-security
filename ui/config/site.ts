@@ -8,8 +8,8 @@ export const siteConfig = {
   name: isVrikaEmbedMode()
     ? "Cloud Security"
     : isCloudEnv
-      ? "Prowler Cloud"
-      : "Prowler",
+      ? "Vrika Cloud"
+      : "Vrika",
   description:
-    'Prowler is the world\'s most widely used Open-Source Cloud Security Platform that automates security and compliance across any cloud environment. With hundreds of ready-to-use security checks, remediation guidance, and compliance frameworks, Prowler is built to "Secure ANY Cloud at AI Speed". Prowler delivers AI-driven, customizable, and easy-to-use assessments, dashboards, reports, and integrations, making cloud security simple, scalable, and cost-effective for organizations of any size.',
+    "Vrika Cloud Security helps teams assess cloud security, investigate findings and attack paths, and track compliance across their connected cloud environments.",
 };

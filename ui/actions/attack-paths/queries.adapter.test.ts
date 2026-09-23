@@ -41,7 +41,7 @@ describe("buildAttackPathQueries", () => {
     },
   );
 
-  it("prepends a custom query that links to the Prowler documentation", () => {
+  it("prepends a custom query that links to the Vrika documentation", () => {
     // When
     const result = buildAttackPathQueries([presetQuery]);
 

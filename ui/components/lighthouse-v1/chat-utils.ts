@@ -3,6 +3,7 @@
  * Client-side utilities for chat.tsx
  */
 
+import { formatAiToolName } from "@/lib/branding";
 import {
   CHAIN_OF_THOUGHT_ACTIONS,
   ERROR_PREFIX,
@@ -64,11 +65,11 @@ export function getChainOfThoughtStepLabel(
   tool: string | null,
 ): string {
   if (metaTool === META_TOOLS.DESCRIBE && tool) {
-    return `Retrieving ${tool} tool info`;
+    return `Retrieving ${formatAiToolName(tool)} tool info`;
   }
 
   if (metaTool === META_TOOLS.EXECUTE && tool) {
-    return `Executing ${tool}`;
+    return `Executing ${formatAiToolName(tool)}`;
   }
 
   if (metaTool === META_TOOLS.LOAD_SKILL && tool) {
@@ -78,7 +79,7 @@ export function getChainOfThoughtStepLabel(
     return `Loading ${skillId} skill`;
   }
 
-  return tool || "Completed";
+  return tool ? formatAiToolName(tool) : "Completed";
 }
 
 /**
@@ -117,7 +118,7 @@ export function getChainOfThoughtHeaderText(
     .find((e) => e.action === CHAIN_OF_THOUGHT_ACTIONS.COMPLETE && e.tool);
 
   if (lastCompletedEvent?.tool) {
-    return `Executing ${lastCompletedEvent.tool}...`;
+    return `Executing ${formatAiToolName(lastCompletedEvent.tool)}...`;
   }
 
   return "Processing...";

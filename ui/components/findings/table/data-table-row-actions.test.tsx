@@ -67,7 +67,7 @@ vi.mock("./finding-note-modal", () => ({
           readOnly
         />
         {triage.disabledReason === "cloud_only" && (
-          <a href={triage.billingHref}>Available in Prowler Cloud</a>
+          <a href={triage.billingHref}>Available in Vrika Cloud</a>
         )}
         <button disabled={!triage.canEdit}>Save changes</button>
       </div>
@@ -320,7 +320,7 @@ describe("DataTableRowActions", () => {
     expect(screen.getByLabelText("Note text")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     expect(
-      screen.getByRole("link", { name: "Available in Prowler Cloud" }),
+      screen.getByRole("link", { name: "Available in Vrika Cloud" }),
     ).toHaveAttribute("href", "https://prowler.com/pricing");
   });
 });

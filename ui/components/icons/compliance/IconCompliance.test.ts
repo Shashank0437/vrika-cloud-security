@@ -52,7 +52,7 @@ describe("getComplianceIcon", () => {
       expect(getComplianceIcon("iso27001_2013_aws")).toBe(isoLogo);
     });
 
-    it("resolves Prowler ThreatScore by the framework keyword, not by `aws`", () => {
+    it("resolves Vrika ThreatScore by the framework keyword, not by `aws`", () => {
       const threatLogo = getComplianceIcon("ProwlerThreatScore");
       expect(threatLogo).toBeDefined();
       expect(getComplianceIcon("prowler_threatscore_aws")).toBe(threatLogo);

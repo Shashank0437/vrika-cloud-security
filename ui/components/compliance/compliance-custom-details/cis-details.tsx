@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 
 import { CustomLink } from "@/components/shadcn/custom/custom-link";
+import { remarkVrikaBranding } from "@/lib/branding";
 import { Requirement } from "@/types/compliance";
 
 import {
@@ -82,7 +83,9 @@ export const CISCustomDetails = ({ requirement }: CISDetailsProps) => {
         typeof requirement.remediation_procedure === "string" && (
           <ComplianceDetailSection title="Remediation Procedure">
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{requirement.remediation_procedure}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkVrikaBranding]}>
+                {requirement.remediation_procedure}
+              </ReactMarkdown>
             </div>
           </ComplianceDetailSection>
         )}
@@ -91,7 +94,9 @@ export const CISCustomDetails = ({ requirement }: CISDetailsProps) => {
         typeof requirement.audit_procedure === "string" && (
           <ComplianceDetailSection title="Audit Procedure">
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{requirement.audit_procedure}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkVrikaBranding]}>
+                {requirement.audit_procedure}
+              </ReactMarkdown>
             </div>
           </ComplianceDetailSection>
         )}

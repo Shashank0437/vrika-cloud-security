@@ -7,7 +7,7 @@ export function isVrikaEmbedMode(): boolean {
 export const VRIKA_EMBED_HIDDEN_MENU_LABELS = new Set([
   "Organization",
   "Support & Help",
-  "Prowler Hub",
+  "Vrika Hub",
 ]);
 
 /** Prowler routes blocked in Vrika embed (chat is allowed; settings are not). */
@@ -32,19 +32,19 @@ export function getVrikaAiLabel(): string {
 
 /** Product name shown in page titles and empty states. */
 export function getEmbedAppName(): string {
-  return isVrikaEmbedMode() ? "Cloud Security" : "Prowler";
+  return isVrikaEmbedMode() ? "Cloud Security" : "Vrika";
 }
 
 /** ThreatScore label without vendor prefix in embed mode. */
 export function getThreatScoreLabel(): string {
-  return isVrikaEmbedMode() ? "ThreatScore" : "Prowler ThreatScore";
+  return isVrikaEmbedMode() ? "ThreatScore" : "Vrika ThreatScore";
 }
 
 /** Upsell copy for Cloud-only features — no vendor name in embed mode. */
 export function getCloudOnlyLabel(): string {
   return isVrikaEmbedMode()
     ? "Not available in this plan"
-    : "Available in Prowler Cloud";
+    : "Available in Vrika Cloud";
 }
 
 /** Hide Cloud upsell badges entirely in Vrika embed. */

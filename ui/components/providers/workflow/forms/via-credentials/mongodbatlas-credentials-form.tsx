@@ -17,7 +17,7 @@ export const MongoDBAtlasCredentialsForm = ({
         </div>
         <div className="text-text-neutral-tertiary text-sm">
           Provide an organization-level MongoDB Atlas API public and private key
-          with read access to the resources you want Prowler to assess.
+          with read access to the resources you want Vrika to assess.
         </div>
       </div>
       <WizardInputField

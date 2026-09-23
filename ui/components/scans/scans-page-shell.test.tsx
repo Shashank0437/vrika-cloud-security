@@ -230,7 +230,7 @@ describe("ScansPageShell", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      /import findings from prowler cli/i,
+      /import findings from vrika cli/i,
     );
     expect(screen.getByRole("link", { name: /learn more/i })).toHaveAttribute(
       "href",

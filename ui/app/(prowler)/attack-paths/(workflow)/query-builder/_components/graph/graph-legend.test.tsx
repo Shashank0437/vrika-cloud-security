@@ -76,7 +76,7 @@ describe("GraphLegend", () => {
     expect(screen.getByText("Highlighted path")).toBeInTheDocument();
     expect(
       screen.getByRole("img", {
-        name: /highlighted path: prowler green path/i,
+        name: /highlighted path: vrika green path/i,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/orange path/i)).not.toBeInTheDocument();

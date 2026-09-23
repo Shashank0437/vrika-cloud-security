@@ -256,7 +256,7 @@ export const getMenuList = ({
       menus: [
         {
           href: "https://hub.prowler.com/",
-          label: "Prowler Hub",
+          label: "Vrika Hub",
           icon: ProwlerShort,
           target: "_blank",
           tooltip: "Looking for all available checks? learn more.",

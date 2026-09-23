@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 
 import { CustomLink } from "@/components/shadcn/custom/custom-link";
+import { remarkVrikaBranding } from "@/lib/branding";
 import {
   isASDAssessmentStatus,
   isASDCloudApplicability,
@@ -129,7 +130,9 @@ export const ASDEssentialEightCustomDetails = ({
       {isNonEmptyString(remediation_procedure) && (
         <ComplianceDetailSection title="Remediation Procedure">
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown>{remediation_procedure}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkVrikaBranding]}>
+              {remediation_procedure}
+            </ReactMarkdown>
           </div>
         </ComplianceDetailSection>
       )}
@@ -137,7 +140,9 @@ export const ASDEssentialEightCustomDetails = ({
       {isNonEmptyString(audit_procedure) && (
         <ComplianceDetailSection title="Audit Procedure">
           <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown>{audit_procedure}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkVrikaBranding]}>
+              {audit_procedure}
+            </ReactMarkdown>
           </div>
         </ComplianceDetailSection>
       )}

@@ -73,7 +73,7 @@ describe("CompliancePageTabs", () => {
       name: /cross-provider/i,
     });
     const tabLabel = screen.getByText("Cross-Provider", { exact: true });
-    const cloudBadge = screen.getByText("Available in Prowler Cloud");
+    const cloudBadge = screen.getByText("Available in Vrika Cloud");
 
     expect(crossProviderTab).toBeDisabled();
     expect(crossProviderTab).not.toHaveClass("disabled:opacity-50");

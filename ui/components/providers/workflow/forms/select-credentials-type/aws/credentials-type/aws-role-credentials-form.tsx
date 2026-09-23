@@ -101,7 +101,7 @@ export const AWSRoleCredentialsForm = ({
               <div className="flex w-full items-center justify-between">
                 <span>
                   {isCloudEnv
-                    ? "Prowler Cloud will assume your IAM role"
+                    ? "Vrika Cloud will assume your IAM role"
                     : "AWS SDK Default"}
                 </span>
                 {isCloudEnv && (

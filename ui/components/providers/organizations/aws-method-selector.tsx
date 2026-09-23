@@ -19,7 +19,7 @@ export function AwsMethodSelector({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted-foreground text-sm">
-        Select a method to add your accounts to Prowler.
+        Select a method to add your accounts to Vrika.
       </p>
 
       <RadioCard

@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/shadcn/tooltip";
+import { brandText } from "@/lib/branding";
 import { buildComplianceDetailPath } from "@/lib/compliance/compliance-detail-url";
 import { getReportTypeForCompliance } from "@/lib/compliance/compliance-report-types";
 import {
@@ -56,7 +57,7 @@ export const ComplianceCard: React.FC<ComplianceCardProps> = ({
   const hasRegionFilter = searchParams.has("filter[region__in]");
 
   const formatTitle = (title: string) => {
-    return title.split("-").join(" ");
+    return brandText(title.split("-").join(" "));
   };
 
   const ratingPercentage = Math.floor(
@@ -121,7 +122,7 @@ export const ComplianceCard: React.FC<ComplianceCardProps> = ({
               <div className="flex h-10 w-10 min-w-10 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white">
                 <Image
                   src={getComplianceIcon(title)}
-                  alt={`${title} logo`}
+                  alt={`${brandText(title)} logo`}
                   width={32}
                   height={32}
                   className="h-8 w-8 object-contain"

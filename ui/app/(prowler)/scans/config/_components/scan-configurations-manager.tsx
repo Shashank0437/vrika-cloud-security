@@ -153,7 +153,7 @@ export function ScanConfigurationsManager({
       <div className="text-text-neutral-secondary mb-6 flex max-w-3xl items-start gap-2 text-sm">
         <Info className="mt-0.5 size-4 shrink-0" />
         <p>
-          By default, every provider uses Prowler&apos;s built-in configuration
+          By default, every provider uses Vrika&apos;s built-in configuration
           baseline. Create a Scan Configuration to override specific values and
           attach it to the providers that should use it. Learn more{" "}
           <CustomLink size="sm" href={DOCS_URLS.SCAN_CONFIGURATION}>
@@ -206,8 +206,8 @@ export function ScanConfigurationsManager({
             </p>
             <p className="text-text-neutral-tertiary mt-1 text-sm">
               The next scan{providerFilter.length === 1 ? "" : "s"} will use the
-              built-in defaults shipped with Prowler. Attach a Scan
-              Configuration from the editor to override them.
+              built-in defaults shipped with Vrika. Attach a Scan Configuration
+              from the editor to override them.
             </p>
           </div>
         </Card>

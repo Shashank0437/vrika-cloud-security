@@ -40,7 +40,7 @@ describe("SubmenuItem", () => {
     expect(screen.getByText("New")).toHaveClass("h-5", "text-[10px]");
     expect(screen.queryByText("Cloud")).not.toBeInTheDocument();
     expect(
-      await screen.findAllByText("Available in Prowler Cloud"),
+      await screen.findAllByText("Available in Vrika Cloud"),
     ).not.toHaveLength(0);
   });
 
@@ -70,7 +70,7 @@ describe("SubmenuItem", () => {
     );
     expect(screen.getByText("New")).toHaveClass("h-5", "text-[10px]");
     expect(
-      await screen.findAllByText("Available in Prowler Cloud"),
+      await screen.findAllByText("Available in Vrika Cloud"),
     ).not.toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 import { getComplianceIcon } from "@/components/icons/compliance/IconCompliance";
+import { brandText } from "@/lib/branding";
 import { MetaDataProps } from "@/types";
 
 import {
@@ -13,7 +14,7 @@ export type { ComplianceOverviewsResponse, EnrichedComplianceOverview };
  * e.g., "FedRAMP-20x-KSI-Low" -> "FedRAMP 20x KSI Low"
  */
 function formatFrameworkName(framework: string): string {
-  return framework.replace(/-/g, " ");
+  return brandText(framework.replace(/-/g, " "));
 }
 
 /**

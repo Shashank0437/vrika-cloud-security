@@ -36,7 +36,7 @@ import {
 } from "./finding-triage-status-control";
 
 /** @deprecated Use getCloudOnlyLabel() from @/lib/vrika-embed */
-export const CLOUD_ONLY_TOOLTIP_COPY = "Available in Prowler Cloud";
+export const CLOUD_ONLY_TOOLTIP_COPY = "Available in Vrika Cloud";
 export const EDITING_UNAVAILABLE_COPY = "Editing is currently unavailable.";
 
 const cloudOnlyTooltipCopy = () => getCloudOnlyLabel();

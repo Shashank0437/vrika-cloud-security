@@ -7,7 +7,7 @@ import { validateMutelistYaml, validateYaml } from "@/lib/yaml";
 import { PROVIDER_TYPES, ProviderType } from "./providers";
 
 export const KUBECONFIG_EXEC_AUTHENTICATION_ERROR =
-  "Kubernetes kubeconfig exec authentication is not supported in Prowler Cloud for security reasons.";
+  "Kubernetes kubeconfig exec authentication is not supported in Vrika Cloud for security reasons.";
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);

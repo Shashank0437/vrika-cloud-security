@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { ComplianceCard } from "@/components/compliance/compliance-card";
 import { OnboardingTrigger, PageReady } from "@/components/onboarding";
 import { DataTableSearch } from "@/components/shadcn/table/data-table-search";
+import { brandText } from "@/lib/branding";
 import { buildComplianceDetailPath } from "@/lib/compliance/compliance-detail-url";
 import { getFlowById } from "@/lib/onboarding";
 import { createViewComplianceTourStepHandlers } from "@/lib/tours/view-compliance.tour";
@@ -44,7 +45,7 @@ export const ComplianceOverviewGrid = ({
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredFrameworks = frameworks.filter((compliance) =>
-    compliance.attributes.framework
+    brandText(compliance.attributes.framework)
       .toLowerCase()
       .includes(searchTerm.toLowerCase()),
   );

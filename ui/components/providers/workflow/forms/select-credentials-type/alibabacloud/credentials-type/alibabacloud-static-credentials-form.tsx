@@ -17,7 +17,7 @@ export const AlibabaCloudStaticCredentialsForm = ({
         </div>
         <div className="text-text-neutral-tertiary text-sm">
           Provide a RAM user Access Key ID and Access Key Secret with read
-          access to the resources you want Prowler to assess.
+          access to the resources you want Vrika to assess.
         </div>
       </div>
       <WizardInputField

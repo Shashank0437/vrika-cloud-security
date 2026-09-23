@@ -13,7 +13,7 @@ describe("UsageLimitMessage", () => {
     expect(screen.getByText(/exceeded the usage limit/i)).toBeInTheDocument();
   });
 
-  it("links to Prowler Cloud billing", () => {
+  it("links to Vrika Cloud billing", () => {
     render(<UsageLimitMessage />);
 
     const link = screen.getByRole("link", { name: /manage billing/i });

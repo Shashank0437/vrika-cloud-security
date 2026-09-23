@@ -29,6 +29,7 @@ import { getComplianceIcon } from "@/components/icons/compliance/IconCompliance"
 import { Button } from "@/components/shadcn/button/button";
 import { Card } from "@/components/shadcn/card/card";
 import { ContentLayout } from "@/components/shadcn/content-layout";
+import { brandText } from "@/lib/branding";
 import { getComplianceMapper } from "@/lib/compliance/compliance-mapper";
 import {
   getReportTypeForCompliance,
@@ -123,7 +124,7 @@ export default async function ComplianceDetail({
 
   const searchParamsKey = buildSearchParamsKey(resolvedSearchParams);
 
-  const formattedTitle = compliancetitle.split("-").join(" ");
+  const formattedTitle = brandText(compliancetitle.split("-").join(" "));
   const pageTitle = version
     ? `${formattedTitle} - ${version}`
     : `${formattedTitle}`;

@@ -17,7 +17,7 @@ export const VercelCredentialsForm = ({
         </div>
         <div className="text-text-neutral-tertiary text-sm">
           Provide a Vercel API Token with read permissions to the resources you
-          want Prowler to assess.
+          want Vrika to assess.
         </div>
       </div>
       <WizardInputField

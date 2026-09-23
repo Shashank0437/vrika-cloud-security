@@ -22,7 +22,7 @@ describe("AwsMethodSelector", () => {
 
     // Then
     expect(
-      screen.getByRole("link", { name: /available in prowler cloud/i }),
+      screen.getByRole("link", { name: /available in vrika cloud/i }),
     ).toHaveAttribute("href", "https://prowler.com/pricing");
   });
 });

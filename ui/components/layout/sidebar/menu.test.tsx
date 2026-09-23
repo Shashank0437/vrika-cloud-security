@@ -108,7 +108,7 @@ describe("Menu", () => {
     expect(screen.getByText("Scan")).toHaveClass("text-xl", "leading-8");
     expect(screen.getByText("Scan")).not.toHaveClass("text-2xl", "font-bold");
     expect(
-      launchScanLink.querySelector('svg[viewBox="0 0 432.08 396.77"]'),
+      launchScanLink.querySelector('svg image[href$="/vrika-mark.png"]'),
     ).toBeInTheDocument();
   });
 
@@ -125,7 +125,7 @@ describe("Menu", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows the Prowler icon when the menu is collapsed", () => {
+  it("shows the Vrika icon when the menu is collapsed", () => {
     pathnameValue.current = "/findings";
 
     render(<MenuComponent isOpen={false} />);
@@ -135,7 +135,7 @@ describe("Menu", () => {
     expect(launchScanLink).toHaveClass("h-9", "w-14");
     expect(launchScanLink).not.toHaveClass("h-14");
     expect(
-      launchScanLink.querySelector('svg[viewBox="0 0 432.08 396.77"]'),
+      launchScanLink.querySelector('svg image[href$="/vrika-mark.png"]'),
     ).toBeInTheDocument();
   });
 
@@ -244,7 +244,7 @@ describe("SidebarNavigationModeToggle", () => {
 
     // Then
     const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent("Available in Prowler Cloud");
+    expect(tooltip).toHaveTextContent("Available in Vrika Cloud");
 
     // When
     await user.click(chatButton);

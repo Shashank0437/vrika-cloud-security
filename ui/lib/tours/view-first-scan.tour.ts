@@ -53,7 +53,7 @@ export function buildViewFirstScanTour(
           align: TOUR_STEP_ALIGNMENTS.START,
           title: "Your scan is running",
           description:
-            "Prowler is assessing your provider right now. Use the In Progress, Completed, and Scheduled tabs to follow this and other scan jobs as they progress.",
+            "Vrika is assessing your provider right now. Use the In Progress, Completed, and Scheduled tabs to follow this and other scan jobs as they progress.",
         },
         {
           target: "launch",

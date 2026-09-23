@@ -54,7 +54,7 @@ describe("auth actions", () => {
       email: "jane@example.com",
       password: "TestPassword123!",
       confirmPassword: "TestPassword123!",
-      company: "Prowler",
+      company: "Vrika",
       invitationToken: "invitation-token",
       termsAndConditions: undefined,
       isSamlMode: false,

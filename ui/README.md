@@ -126,6 +126,14 @@ identified as such. A model that still requests tools is stopped with an
 actionable error instead of reaching LangGraph's default 25-step recursion
 limit. The budget resets for each new user question.
 
+## Vrika branding
+
+Visible product copy, onboarding, logos and favicon use Vrika branding.
+Markdown presentation replaces legacy product names in prose, but preserves
+commands, code blocks and actual link destinations. Compliance and graph labels
+are branded only for display; stored framework names, resource identities,
+MCP names, API paths and filter keys retain their original values.
+
 ## Technologies Used
 
 - [Next.js 16](https://nextjs.org/docs/getting-started)

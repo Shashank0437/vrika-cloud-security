@@ -373,11 +373,11 @@ describe("SeedFromFindingsButton", () => {
     expect(button.className).not.toContain("min-w");
     expect(button).not.toHaveClass("justify-start");
     const pricingLink = screen.getByRole("link", {
-      name: /available in prowler cloud/i,
+      name: /available in vrika cloud/i,
     });
     expect(pricingLink).toHaveAttribute("href", "https://prowler.com/pricing");
     expect(pricingLink).toHaveClass("whitespace-nowrap");
-    expect(pricingLink).toHaveTextContent("Available in Prowler Cloud");
+    expect(pricingLink).toHaveTextContent("Available in Vrika Cloud");
     expect(pricingLink.closest("button")).toBeNull();
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(actionMocks.seedAlertRule).not.toHaveBeenCalled();

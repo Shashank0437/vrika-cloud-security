@@ -238,7 +238,7 @@ export const SignUpForm = ({
                       >
                         Terms of Service
                       </CustomLink>
-                      &nbsp;of Prowler
+                      &nbsp;of Vrika
                       <span className="text-text-error-primary">*</span>
                     </label>
                   </div>

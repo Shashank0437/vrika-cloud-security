@@ -1,6 +1,7 @@
 import { VariantProps } from "class-variance-authority";
 
 import { Badge, badgeVariants } from "@/components/shadcn/badge/badge";
+import { brandText } from "@/lib/branding";
 
 // Variants come straight from the canonical shadcn Badge so compliance panels
 // share the same badge vocabulary (and tokens) as the rest of the app.
@@ -40,7 +41,11 @@ export const ComplianceDetailText = ({
   children: React.ReactNode;
   className?: string;
 }) => {
-  return <p className={`text-sm leading-relaxed ${className}`}>{children}</p>;
+  return (
+    <p className={`text-sm leading-relaxed ${className}`}>
+      {typeof children === "string" ? brandText(children) : children}
+    </p>
+  );
 };
 
 export const ComplianceBadgeContainer = ({

@@ -32,7 +32,7 @@ describe("RoleItem", () => {
     vi.unstubAllEnvs();
   });
 
-  it("shows Manage Alerts in Prowler Cloud role details", () => {
+  it("shows Manage Alerts in Vrika Cloud role details", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "true");
 
@@ -43,7 +43,7 @@ describe("RoleItem", () => {
     expect(screen.getByText("Manage Alerts")).toBeInTheDocument();
   });
 
-  it("hides Manage Alerts outside Prowler Cloud role details", () => {
+  it("hides Manage Alerts outside Vrika Cloud role details", () => {
     // Given
     vi.stubEnv("NEXT_PUBLIC_IS_CLOUD_ENV", "false");
 

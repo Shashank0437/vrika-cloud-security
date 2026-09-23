@@ -196,7 +196,7 @@ describe("getMenuList", () => {
 
       expect(labels).not.toContain("Organization");
       expect(labels).not.toContain("Support & Help");
-      expect(labels).not.toContain("Prowler Hub");
+      expect(labels).not.toContain("Vrika Hub");
       expect(labels).toContain("Vrika AI");
       expect(configLabels).not.toContain("Lighthouse AI");
       expect(labels).toContain("Overview");

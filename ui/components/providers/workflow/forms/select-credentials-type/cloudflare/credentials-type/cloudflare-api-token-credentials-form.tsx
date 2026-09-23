@@ -19,7 +19,7 @@ export const CloudflareApiTokenCredentialsForm = ({
         </div>
         <div className="text-text-neutral-tertiary text-sm">
           Provide a Cloudflare API Token with read permissions to the resources
-          you want Prowler to assess. This is the recommended authentication
+          you want Vrika to assess. This is the recommended authentication
           method.
         </div>
       </div>
