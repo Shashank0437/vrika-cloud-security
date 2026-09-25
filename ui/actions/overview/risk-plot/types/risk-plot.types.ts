@@ -41,6 +41,7 @@ export interface ProviderRiskData {
     medium: number;
     low: number;
     informational: number;
+    unknown?: number;
   } | null;
 }
 

@@ -239,6 +239,7 @@ export function getEmptyResourceInventoryItems(): ResourceInventoryItem[] {
       newFailedFindings: 0,
       severity: {
         informational: 0,
+        unknown: 0,
         low: 0,
         medium: 0,
         high: 0,

@@ -7,7 +7,11 @@ import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Table
 from tasks.jobs.reports import vrika_scan as reports
-from tasks.jobs.reports.vrika_scan_cards import FrameworkCard, build_framework_card_grid
+from tasks.jobs.reports.vrika_scan_cards import (
+    FrameworkCard,
+    build_framework_card_grid,
+    build_severity_chart,
+)
 from tasks.jobs.reports.vrika_scan_narrative import (
     ScanNarrativeContext,
     build_executive_summary_paragraphs,
@@ -33,6 +37,15 @@ def paragraphs(flowables):
                     yield from paragraphs(
                         cell if isinstance(cell, (list, tuple)) else [cell]
                     )
+
+
+def test_pdf_counts_and_labels_include_unknown(generator):
+    chart = build_severity_chart({"unknown": 11, "critical": 2}, 230)
+    labels = [item.text for item in chart.contents if hasattr(item, "text")]
+    assert "Unknown / Unrated" in labels
+    assert "11" in labels
+    assert "2" in labels
+    assert len(labels) == 12
 
 
 def assert_within_width(flowables, width):

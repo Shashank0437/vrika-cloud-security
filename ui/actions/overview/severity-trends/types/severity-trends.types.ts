@@ -7,6 +7,7 @@ export interface FindingsSeverityOverTimeAttributes {
   medium: number;
   low: number;
   informational: number;
+  unknown?: number;
   muted: number;
   scan_ids: string[];
 }

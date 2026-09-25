@@ -3,6 +3,7 @@ import {
   Bot,
   Braces,
   CircleAlert,
+  CircleHelp,
   FileKey2,
   Globe2,
   Info,
@@ -263,7 +264,7 @@ describe("resolveNodeVisual", () => {
       }
     });
 
-    it("should use the generic alert icon when finding severity is unknown", () => {
+    it("should distinguish unrated findings with a question icon", () => {
       // Given
       const node = buildNode(["ProwlerFinding"], {
         check_title: "Unknown risk",
@@ -274,7 +275,7 @@ describe("resolveNodeVisual", () => {
       const visual = resolveNodeVisual(node);
 
       // Then
-      expect(visual.Icon).toBe(AlertTriangle);
+      expect(visual.Icon).toBe(CircleHelp);
     });
 
     it("should resolve Internet nodes to internet metadata", () => {

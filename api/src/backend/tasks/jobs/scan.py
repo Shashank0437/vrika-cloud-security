@@ -872,7 +872,12 @@ def _process_finding_micro_batch(
                         status_extended=finding.status_extended,
                         severity=finding.severity,
                         impact=finding.severity,
-                        raw_result=finding.raw,
+                        raw_result={
+                            **finding.raw,
+                            "scanner_finding": finding.resource_metadata,
+                        }
+                        if provider_instance.provider == "iac"
+                        else finding.raw,
                         check_id=finding.check_id,
                         scan=scan_instance,
                         first_seen_at=last_first_seen_at,
@@ -1970,6 +1975,7 @@ def aggregate_daily_severity(tenant_id: str, scan_id: str):
             "medium": 0,
             "low": 0,
             "informational": 0,
+            "unknown": 0,
             "muted": 0,
         }
 
@@ -1991,6 +1997,7 @@ def aggregate_daily_severity(tenant_id: str, scan_id: str):
                 "medium": severity_data["medium"],
                 "low": severity_data["low"],
                 "informational": severity_data["informational"],
+                "unknown": severity_data["unknown"],
                 "muted": severity_data["muted"],
             },
         )
@@ -2327,7 +2334,9 @@ def aggregate_finding_group_summaries(tenant_id: str, scan_id: str):
                     check_title=metadata.get("checktitle", ""),
                     check_description=metadata.get("description", "")
                     or metadata.get("Description", ""),
-                    severity_order=row["severity_order"] or 1,
+                    severity_order=row["severity_order"]
+                    if row["severity_order"] is not None
+                    else 1,
                     pass_count=row["pass_count"],
                     fail_count=row["fail_count"],
                     manual_count=row["manual_count"],

@@ -1,3 +1,5 @@
+import type { SeverityLevel } from "./severities";
+
 export interface ResourceProps {
   type: "resources";
   id: string;
@@ -69,7 +71,7 @@ interface ResourceItemProps {
     delta: string;
     status: "PASS" | "FAIL" | "MANUAL";
     status_extended: string;
-    severity: "informational" | "low" | "medium" | "high" | "critical";
+    severity: SeverityLevel;
     check_id: string;
     check_metadata: CheckMetadataProps;
     raw_result: Record<string, unknown>;

@@ -14,6 +14,7 @@ export const GRAPH_NODE_COLORS = {
   medium: "#b8860b", // Dark goldenrod (from #fec94d)
   low: "#8b9a3e", // Olive/dark yellow-green (from #fdfbd4)
   info: "#2563eb", // Darker blue (from #3c8dff)
+  unknown: "slategray",
   // Node types
   prowlerFinding: "#ea580c",
   awsAccount: "#f59e0b", // Amber 500 - AWS orange
@@ -38,6 +39,7 @@ export const GRAPH_NODE_BORDER_COLORS = {
   medium: "#fec94d", // Original --bg-data-medium
   low: "#c4d4a0", // Lighter olive
   info: "#3c8dff", // Original --bg-data-info
+  unknown: "lightslategray",
   prowlerFinding: "#fb923c",
   awsAccount: "#fbbf24", // Amber 400
   attackPattern: "#4ade80",
@@ -78,6 +80,7 @@ export const getNodeColor = (
     if (severity === "high") return GRAPH_NODE_COLORS.high;
     if (severity === "medium") return GRAPH_NODE_COLORS.medium;
     if (severity === "low") return GRAPH_NODE_COLORS.low;
+    if (severity === "unknown") return GRAPH_NODE_COLORS.unknown;
     if (severity === "informational" || severity === "info")
       return GRAPH_NODE_COLORS.info;
     return GRAPH_NODE_COLORS.prowlerFinding;
@@ -111,6 +114,7 @@ export const getNodeBorderColor = (
     if (severity === "high") return GRAPH_NODE_BORDER_COLORS.high;
     if (severity === "medium") return GRAPH_NODE_BORDER_COLORS.medium;
     if (severity === "low") return GRAPH_NODE_BORDER_COLORS.low;
+    if (severity === "unknown") return GRAPH_NODE_BORDER_COLORS.unknown;
     if (severity === "informational" || severity === "info")
       return GRAPH_NODE_BORDER_COLORS.info;
     return GRAPH_NODE_BORDER_COLORS.prowlerFinding;

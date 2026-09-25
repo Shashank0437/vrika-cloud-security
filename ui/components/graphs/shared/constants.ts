@@ -19,6 +19,7 @@ export const SEVERITY_ORDER = {
   Low: 3,
   Informational: 4,
   Info: 4,
+  "Unknown / Unrated": 5,
 } as const;
 
 export const LAYOUT_OPTIONS = {

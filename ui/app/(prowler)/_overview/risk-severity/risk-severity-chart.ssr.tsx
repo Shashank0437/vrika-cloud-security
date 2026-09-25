@@ -27,6 +27,7 @@ export const RiskSeverityChartSSR = async ({
     medium = 0,
     low = 0,
     informational = 0,
+    unknown = 0,
   } = findingsBySeverity?.data?.attributes || {};
 
   return (
@@ -36,6 +37,7 @@ export const RiskSeverityChartSSR = async ({
       medium={medium}
       low={low}
       informational={informational}
+      unknown={unknown}
     />
   );
 };

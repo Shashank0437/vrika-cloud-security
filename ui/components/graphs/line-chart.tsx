@@ -79,6 +79,7 @@ const CustomLineTooltip = ({
     "medium",
     "low",
     "informational",
+    "unknown",
   ] as const;
   const displayPayload = [...filteredPayload].sort((a, b) => {
     const aIndex = severityOrder.indexOf(

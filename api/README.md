@@ -642,11 +642,24 @@ Successfully populated test data.
 
 The API uses an IaC SDK adapter to normalize recognized severity labels
 (case/whitespace and `INFO` to `informational`) without modifying raw finding
-evidence. Missing or unsupported labels, including `UNKNOWN`, are not assigned
-an arbitrary severity: their check IDs, paths, and original severity values are
-logged as import errors. Valid findings are retained, but the scan is marked
-**Failed** with an incomplete-import error, not treated as a successful clean
-scan. Up to 20 error examples are included in the task failure.
+evidence. Missing, unrated, or unsupported labels are stored as `unknown`, displayed
+as **Unknown / Unrated**. Their original values remain in raw evidence, and the worker
+logs the check ID, path, and original label. They retain their original PASS/FAIL
+status and do not cause an otherwise valid scan to fail. Unknown findings are
+included in severity filters, overview totals/trends, and PDF charts. Unknown is
+not a low-risk rating; review unrated findings separately from rated priorities.
+
+The locked SDK does not yet declare this category. `scripts/patch_severity.py`
+adds it to the SDK's native enum at image build/startup, before model validation.
+For non-container development, run `uv run python scripts/patch_severity.py` from
+`src/backend` after installing/syncing dependencies. Migration `0102` adds the
+PostgreSQL enum value and daily-summary counter; apply it before starting updated
+workers. This additive enum migration is intentionally irreversible, since removing
+the category would invalidate retained evidence.
+
+Other malformed findings and scanner errors still retain valid partial results
+and mark the scan **Failed** with an incomplete-import error. Up to 20 error
+examples are included in the task failure.
 
 SDK process exits are converted into ordinary task failures so they cannot
 terminate the Celery child and leave the scan executing at 100%. Progress stays

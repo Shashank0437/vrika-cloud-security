@@ -75,6 +75,7 @@ manage_db_partitions() {
 }
 
 patch_prowler_code() {
+  uv run python scripts/patch_severity.py || exit 1
   if [ -f "scripts/patch_image_provider.py" ]; then
     uv run python scripts/patch_image_provider.py || true
   fi

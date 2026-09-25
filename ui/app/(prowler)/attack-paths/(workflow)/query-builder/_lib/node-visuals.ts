@@ -4,6 +4,7 @@ import {
   Box,
   Braces,
   CircleAlert,
+  CircleHelp,
   FileKey2,
   Globe2,
   Info,
@@ -482,6 +483,7 @@ const FINDING_SEVERITY = {
   LOW: "low",
   INFO: "info",
   INFORMATIONAL: "informational",
+  UNKNOWN: "unknown",
 } as const;
 
 type FindingSeverity = (typeof FINDING_SEVERITY)[keyof typeof FINDING_SEVERITY];
@@ -493,6 +495,7 @@ const FINDING_SEVERITY_ICONS = {
   [FINDING_SEVERITY.LOW]: Info,
   [FINDING_SEVERITY.INFO]: Info,
   [FINDING_SEVERITY.INFORMATIONAL]: Info,
+  [FINDING_SEVERITY.UNKNOWN]: CircleHelp,
 } as const satisfies Record<FindingSeverity, ElementType>;
 
 const stringifyProperty = (

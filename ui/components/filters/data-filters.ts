@@ -66,7 +66,7 @@ export const filterFindings = [
   {
     key: FILTER_FIELD.SEVERITY,
     labelCheckboxGroup: "Severity",
-    values: ["critical", "high", "medium", "low", "informational"],
+    values: ["critical", "high", "medium", "low", "informational", "unknown"],
     index: 0,
   },
   {

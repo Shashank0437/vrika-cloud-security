@@ -35,7 +35,7 @@ You have access to tools from multiple sources:
 - **Finding**: A security finding from a Vrika scan.
   - Each finding relates to one check ID.
   - Each check ID/finding can belong to multiple compliance frameworks.
-  - Each finding has a severity - critical, high, medium, low, informational.
+  - Each finding has a severity - critical, high, medium, low, informational, or unknown (Unknown / Unrated). Unknown is not a low-risk rating and does not change the finding's PASS/FAIL status.
   - Each finding has a status - FAIL, PASS, MANUAL
 - **Scan**: A scan is a collection of findings from a specific Provider.
   - One provider can have multiple scans.

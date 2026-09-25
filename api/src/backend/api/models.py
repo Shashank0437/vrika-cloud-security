@@ -1791,6 +1791,7 @@ class DailySeveritySummary(RowLevelSecurityProtectedModel):
     medium = models.IntegerField(default=0)
     low = models.IntegerField(default=0)
     informational = models.IntegerField(default=0)
+    unknown = models.IntegerField(default=0)
     muted = models.IntegerField(default=0)
 
     class Meta(RowLevelSecurityProtectedModel.Meta):

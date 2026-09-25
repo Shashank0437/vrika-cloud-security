@@ -112,6 +112,7 @@ export const FINDING_STATUS_DISPLAY_NAMES: Record<FindingStatus, string> = {
 
 export const SEVERITY = {
   INFORMATIONAL: "informational",
+  UNKNOWN: "unknown",
   LOW: "low",
   MEDIUM: "medium",
   HIGH: "high",
@@ -223,6 +224,7 @@ export interface FindingsSeverityOverview {
       medium: number;
       low: number;
       informational: number;
+      unknown?: number;
     };
   };
   meta: {

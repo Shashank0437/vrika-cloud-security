@@ -3,17 +3,8 @@
 import { Button } from "@/components/shadcn";
 import { Spinner } from "@/components/shadcn/spinner/spinner";
 import { SeverityBadge } from "@/components/shadcn/table/severity-badge";
+import { normalizeSeverity } from "@/lib/severity";
 import type { GraphNode } from "@/types/attack-paths";
-
-const SEVERITY_LEVELS = {
-  informational: "informational",
-  low: "low",
-  medium: "medium",
-  high: "high",
-  critical: "critical",
-} as const;
-
-type Severity = (typeof SEVERITY_LEVELS)[keyof typeof SEVERITY_LEVELS];
 
 interface NodeFindingsProps {
   node: GraphNode;
@@ -41,18 +32,6 @@ export const NodeFindings = ({
   if (findingNodes.length === 0) {
     return null;
   }
-
-  const normalizeSeverity = (
-    severity?: string | number | boolean | string[] | number[] | null,
-  ): Severity => {
-    const sev = String(
-      Array.isArray(severity) ? severity[0] : severity || "",
-    ).toLowerCase();
-    if (sev in SEVERITY_LEVELS) {
-      return sev as Severity;
-    }
-    return "informational";
-  };
 
   return (
     <ul className="flex flex-col gap-3">

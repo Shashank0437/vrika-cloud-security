@@ -9,6 +9,7 @@ import pytest
 from api.iac_provider import ApiIacProvider
 from api.models import StateChoices
 from api.utils import return_prowler_provider
+from prowler.lib.outputs.finding import Finding as SDKFinding
 from prowler.providers.iac.iac_provider import IacProvider
 from tasks.jobs import scan as scan_jobs
 
@@ -57,8 +58,10 @@ def test_normalizes_severity_without_changing_raw_evidence(provider, raw, expect
     provider.raise_for_import_errors()
 
 
-@pytest.mark.parametrize("severity", ["UNKNOWN", "", None, 12])
-def test_unsupported_severity_retains_valid_results_but_fails_scan(provider, severity):
+@pytest.mark.parametrize(
+    "severity", ["UNKNOWN", "unrated", " new-level ", "", None, 12]
+)
+def test_unrated_severity_retains_all_results(provider, severity):
     def output(self, *args):
         yield [
             self._process_finding(finding(severity), "bad.tf", "terraform"),
@@ -67,12 +70,14 @@ def test_unsupported_severity_retains_valid_results_but_fails_scan(provider, sev
 
     with patch.object(IacProvider, "run_scan", output):
         reports = provider.run()
-    assert len(reports) == 1
-    assert reports[0].resource_name == "good.tf"
-    with pytest.raises(ValueError, match="unsupported severity") as error:
-        provider.raise_for_import_errors()
-    assert repr(severity) in str(error.value)
-    assert "AVD-AWS-0001" in str(error.value)
+    assert len(reports) == 2
+    assert reports[0].resource_name == "bad.tf"
+    assert reports[0].check_metadata.Severity.value == "unknown"
+    assert reports[0].resource["Severity"] == severity
+    assert reports[0].status == "FAIL"
+    assert reports[1].check_metadata.Severity.value == "high"
+    assert provider.unrated_findings_count == 1
+    provider.raise_for_import_errors()
 
 
 def test_sdk_exit_becomes_normal_failure(provider):
@@ -84,7 +89,7 @@ def test_sdk_exit_becomes_normal_failure(provider):
         provider.raise_for_import_errors()
 
 
-def test_real_trivy_parser_preserves_partial_findings(provider):
+def test_real_trivy_parser_preserves_unrated_findings(provider):
     output = {
         "Results": [
             {
@@ -101,10 +106,47 @@ def test_real_trivy_parser_preserves_partial_findings(provider):
         ),
     ):
         reports = provider.run()
-    assert len(reports) == 1
-    assert reports[0].check_metadata.Severity.value == "informational"
-    assert reports[0].resource["Severity"] == "INFO"
-    with pytest.raises(ValueError, match="UNKNOWN"):
+    assert len(reports) == 2
+    assert reports[0].check_metadata.Severity.value == "unknown"
+    assert reports[0].resource["Severity"] == "UNKNOWN"
+    assert reports[1].check_metadata.Severity.value == "informational"
+    assert reports[1].resource["Severity"] == "INFO"
+    provider.raise_for_import_errors()
+
+
+def test_missing_severity_keeps_original_evidence(provider):
+    source = finding()
+    del source["Severity"]
+    with patch.object(IacProvider, "run_scan", return_value=iter([])):
+        list(provider.run_scan(".", [], []))
+    report = provider._process_finding(source, "main.tf", "terraform")
+    assert report.check_metadata.Severity.value == "unknown"
+    assert "Severity" not in report.resource
+    provider.raise_for_import_errors()
+
+
+@pytest.mark.parametrize("status", ["PASS", "FAIL"])
+def test_sdk_finding_conversion_preserves_unrated_status_and_evidence(provider, status):
+    provider._type = "iac"
+    provider._auth_method = "local"
+    source = finding("UNKNOWN")
+    source["Status"] = status
+    with patch.object(IacProvider, "run_scan", return_value=iter([])):
+        list(provider.run_scan(".", [], []))
+    report = provider._process_finding(source, "go.mod", "gomod")
+    converted = SDKFinding.generate_output(provider, report, SimpleNamespace())
+    assert converted.severity.value == "unknown"
+    assert converted.status == status
+    assert converted.resource_metadata["Severity"] == "UNKNOWN"
+
+
+def test_invalid_identity_is_not_hidden_by_unknown_severity(provider):
+    source = finding("UNKNOWN")
+    del source["ID"]
+    with patch.object(IacProvider, "run_scan", return_value=iter([])):
+        list(provider.run_scan(".", [], []))
+    assert provider._process_finding(source, "bad.tf", "terraform") is None
+    with pytest.raises(ValueError, match="SDK report conversion"):
         provider.raise_for_import_errors()
 
 
@@ -170,7 +212,7 @@ def test_failed_scan_persists_failed_state_not_100_percent(phase):
         elif phase == "partial_import":
             runner.return_value.scan.return_value = [(100, [object()])]
             sdk.raise_for_import_errors.side_effect = ValueError(
-                "unsupported severity UNKNOWN"
+                "SDK report conversion exited"
             )
         else:
             runner.return_value.scan.return_value = [(100, [])]

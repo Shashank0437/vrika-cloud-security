@@ -258,6 +258,7 @@ def backfill_daily_severity_summaries(tenant_id: str, days: int = None):
                 "medium": 0,
                 "low": 0,
                 "informational": 0,
+                "unknown": 0,
                 "muted": 0,
             }
 
@@ -279,6 +280,7 @@ def backfill_daily_severity_summaries(tenant_id: str, days: int = None):
                     "medium": severity_data["medium"],
                     "low": severity_data["low"],
                     "informational": severity_data["informational"],
+                    "unknown": severity_data["unknown"],
                     "muted": severity_data["muted"],
                 },
             )

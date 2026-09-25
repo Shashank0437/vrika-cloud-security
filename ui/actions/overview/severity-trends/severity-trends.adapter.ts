@@ -22,6 +22,7 @@ export function adaptSeverityTrendsResponse(
       id,
       attributes: {
         informational,
+        unknown = 0,
         low,
         medium,
         high,
@@ -32,6 +33,7 @@ export function adaptSeverityTrendsResponse(
     }) => ({
       date: id,
       informational,
+      unknown,
       low,
       medium,
       high,

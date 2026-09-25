@@ -32,6 +32,7 @@ function mapCategoryToRadarPoint(item: CategoryOverview): RadarDataPoint {
       { name: "Medium", value: severity.medium },
       { name: "Low", value: severity.low },
       { name: "Info", value: severity.informational },
+      { name: "Unknown / Unrated", value: severity.unknown ?? 0 },
     ],
   };
 }

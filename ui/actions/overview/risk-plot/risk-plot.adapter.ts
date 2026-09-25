@@ -47,9 +47,16 @@ export function adaptToRiskPlotData(
     let totalFailedFindings = 0;
 
     if (providerData.severity) {
-      const { critical, high, medium, low, informational } =
-        providerData.severity;
-      totalFailedFindings = critical + high + medium + low + informational;
+      const {
+        critical,
+        high,
+        medium,
+        low,
+        informational,
+        unknown = 0,
+      } = providerData.severity;
+      totalFailedFindings =
+        critical + high + medium + low + informational + unknown;
 
       severityData = [
         {
@@ -76,6 +83,11 @@ export function adaptToRiskPlotData(
           name: "Info",
           value: informational,
           percentage: calculatePercentage(informational, totalFailedFindings),
+        },
+        {
+          name: "Unknown / Unrated",
+          value: unknown,
+          percentage: calculatePercentage(unknown, totalFailedFindings),
         },
       ];
     }

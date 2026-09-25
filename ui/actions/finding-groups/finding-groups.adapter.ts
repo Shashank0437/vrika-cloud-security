@@ -1,11 +1,11 @@
 import { adaptFindingTriageSummariesResponse } from "@/actions/findings/findings-triage.adapter";
 import { getFindingTriageAdapterOptions } from "@/actions/findings/findings-triage.options";
+import { normalizeSeverity } from "@/lib/severity";
 import type {
   FindingGroupRow,
   FindingResourceRow,
   FindingStatus,
   ProviderType,
-  Severity,
 } from "@/types";
 import { FINDINGS_ROW_TYPE } from "@/types";
 
@@ -80,7 +80,7 @@ export function adaptFindingGroupsResponse(
     rowType: FINDINGS_ROW_TYPE.GROUP,
     checkId: item.attributes.check_id,
     checkTitle: item.attributes.check_title || item.attributes.check_id,
-    severity: item.attributes.severity as Severity,
+    severity: normalizeSeverity(item.attributes.severity),
     status: item.attributes.status as FindingStatus,
     muted:
       item.attributes.muted ??
@@ -219,7 +219,7 @@ export function adaptFindingGroupResourcesResponse(
     resourceUid: item.attributes.resource?.uid || "-",
     service: item.attributes.resource?.service || "-",
     region: item.attributes.resource?.region || "-",
-    severity: (item.attributes.severity || "informational") as Severity,
+    severity: normalizeSeverity(item.attributes.severity),
     status: item.attributes.status,
     statusExtended: item.attributes.status_extended,
     delta: item.attributes.delta || null,

@@ -2662,6 +2662,7 @@ class OverviewSeveritySerializer(BaseSerializerV1):
     medium = serializers.IntegerField()
     low = serializers.IntegerField()
     informational = serializers.IntegerField()
+    unknown = serializers.IntegerField()
 
     class JSONAPIMeta:
         resource_name = "findings-severity-overview"
@@ -2676,6 +2677,7 @@ class FindingsSeverityOverTimeSerializer(BaseSerializerV1):
     medium = serializers.IntegerField()
     low = serializers.IntegerField()
     informational = serializers.IntegerField()
+    unknown = serializers.IntegerField()
     muted = serializers.IntegerField()
     scan_ids = serializers.ListField(child=serializers.UUIDField())
 
@@ -2718,7 +2720,7 @@ class CategoryOverviewSerializer(BaseSerializerV1):
     failed_findings = serializers.IntegerField()
     new_failed_findings = serializers.IntegerField()
     severity = serializers.JSONField(
-        help_text="Severity breakdown: {informational, low, medium, high, critical}"
+        help_text="Severity breakdown: {unknown, informational, low, medium, high, critical}"
     )
 
     class JSONAPIMeta:
@@ -2734,7 +2736,7 @@ class ResourceGroupOverviewSerializer(BaseSerializerV1):
     new_failed_findings = serializers.IntegerField()
     resources_count = serializers.IntegerField()
     severity = serializers.JSONField(
-        help_text="Severity breakdown: {informational, low, medium, high, critical}"
+        help_text="Severity breakdown: {unknown, informational, low, medium, high, critical}"
     )
 
     class JSONAPIMeta:

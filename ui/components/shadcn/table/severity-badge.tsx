@@ -1,7 +1,9 @@
+import { normalizeSeverity } from "@/lib/severity";
 import { cn } from "@/lib/utils";
 
 export const SeverityValues = {
   INFORMATIONAL: "informational",
+  UNKNOWN: "unknown",
   LOW: "low",
   MEDIUM: "medium",
   HIGH: "high",
@@ -16,6 +18,7 @@ const SEVERITY_CHIP_COLORS = {
   medium: "bg-bg-data-medium",
   low: "bg-bg-data-low",
   informational: "bg-bg-data-info",
+  unknown: "bg-bg-data-muted",
 } as const;
 
 const SEVERITY_DISPLAY_NAMES = {
@@ -24,6 +27,7 @@ const SEVERITY_DISPLAY_NAMES = {
   medium: "Medium",
   low: "Low",
   informational: "Info",
+  unknown: "Unknown / Unrated",
 } as const;
 
 interface SeverityBadgeProps {
@@ -31,9 +35,9 @@ interface SeverityBadgeProps {
 }
 
 export const SeverityBadge = ({ severity }: SeverityBadgeProps) => {
-  const chipColor =
-    SEVERITY_CHIP_COLORS[severity] || SEVERITY_CHIP_COLORS.informational;
-  const displayName = SEVERITY_DISPLAY_NAMES[severity] || severity;
+  const normalized = normalizeSeverity(severity);
+  const chipColor = SEVERITY_CHIP_COLORS[normalized];
+  const displayName = SEVERITY_DISPLAY_NAMES[normalized];
 
   return (
     <div className="flex items-center gap-1">

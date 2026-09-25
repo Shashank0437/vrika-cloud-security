@@ -1,6 +1,7 @@
 import { adaptFindingTriageSummariesResponse } from "@/actions/findings/findings-triage.adapter";
 import { getFindingTriageAdapterOptions } from "@/actions/findings/findings-triage.options";
 import { createDict } from "@/lib";
+import { normalizeSeverity } from "@/lib/severity";
 import type { ProviderType, Severity } from "@/types";
 import type { FindingTriageSummary } from "@/types/findings-triage";
 
@@ -256,7 +257,7 @@ export function adaptFindingsByResourceResponse(
       checkId: attrs.check_id,
       checkTitle: (meta.checktitle as string | undefined) || attrs.check_id,
       status: attrs.status,
-      severity: (attrs.severity || "informational") as Severity,
+      severity: normalizeSeverity(attrs.severity),
       delta: attrs.delta || null,
       isMuted: Boolean(attrs.muted),
       mutedReason: attrs.muted_reason || null,

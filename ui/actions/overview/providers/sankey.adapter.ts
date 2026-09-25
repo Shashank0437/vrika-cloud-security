@@ -27,6 +27,7 @@ export interface SeverityData {
   medium: number;
   low: number;
   informational: number;
+  unknown?: number;
 }
 
 export interface SeverityByProviderType {
@@ -39,6 +40,7 @@ const SEVERITY_ORDER = [
   "Medium",
   "Low",
   "Informational",
+  "Unknown / Unrated",
 ] as const;
 
 const SEVERITY_KEYS: (keyof SeverityData)[] = [
@@ -47,6 +49,7 @@ const SEVERITY_KEYS: (keyof SeverityData)[] = [
   "medium",
   "low",
   "informational",
+  "unknown",
 ];
 
 /**
@@ -86,7 +89,8 @@ export function adaptToSankeyData(
       severity.high +
       severity.medium +
       severity.low +
-      severity.informational;
+      severity.informational +
+      (severity.unknown ?? 0);
 
     const normalizedType = providerType.toLowerCase();
 
@@ -146,7 +150,7 @@ export function adaptToSankeyData(
 
     if (severity) {
       SEVERITY_KEYS.forEach((key, severityIndex) => {
-        const value = severity[key];
+        const value = severity[key] ?? 0;
         if (value > 0) {
           links.push({
             source: sourceIndex,

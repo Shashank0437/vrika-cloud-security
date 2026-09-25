@@ -6,6 +6,7 @@ interface OverviewResponseMeta {
 
 export interface SeverityBreakdown {
   informational: number;
+  unknown?: number;
   low: number;
   medium: number;
   high: number;

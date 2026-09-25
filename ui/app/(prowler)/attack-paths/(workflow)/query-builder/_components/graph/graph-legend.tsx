@@ -117,6 +117,13 @@ const buildVisualItem = (
 
 const findingRiskItems: LegendVisualItem[] = [
   buildVisualItem(
+    "Unknown / Unrated",
+    "Severity has not been rated; this does not indicate low risk.",
+    buildNode(["ProwlerFinding"], { severity: "unknown" }),
+    GRAPH_NODE_COLORS.unknown,
+    GRAPH_NODE_BORDER_COLORS.unknown,
+  ),
+  buildVisualItem(
     "Critical",
     "Highest-risk finding node with severity-colored badge and glow.",
     buildNode(["ProwlerFinding"], { severity: "critical" }),
@@ -292,6 +299,8 @@ const resolveFindingRiskItems = (
   );
 
   return findingRiskItems.filter((item) => {
+    if (item.label === "Unknown / Unrated")
+      return visibleSeverities.has("unknown");
     if (item.label === "Low / Info") {
       return (
         visibleSeverities.has("low") ||

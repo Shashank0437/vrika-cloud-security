@@ -70,7 +70,7 @@ from .vrika_scan_narrative import (
 
 logger = get_task_logger(__name__)
 
-SEVERITY_ORDER = ("critical", "high", "medium", "low", "informational")
+SEVERITY_ORDER = ("critical", "high", "medium", "low", "informational", "unknown")
 TOP_RISKS_LIMIT = 15
 FRAMEWORK_CARD_LIMIT = 12
 # AWS ships 80+ compliance frameworks; scanning all of them stalls the worker.
@@ -89,6 +89,7 @@ SEVERITY_TEXT_COLORS = {
     "medium": "#C77700",
     "low": "#8A6D00",
     "informational": "#6B7280",
+    "unknown": "#475569",
 }
 
 
@@ -531,6 +532,8 @@ class VrikaScanReportGenerator:
                 text = "" if value is None else str(value)
                 if severity_field and c.field == severity_field:
                     cell_style = self._severity_cell_style(text)
+                    if text.lower() == "unknown":
+                        text = "Unknown / Unrated"
                     row.append(Paragraph(f"<b>{escape_html(text)}</b>", cell_style))
                 else:
                     cell_style = self._td_left if c.align == "LEFT" else self._td_center
@@ -980,6 +983,14 @@ class VrikaScanReportGenerator:
                 )
             )
         elements.append(KeepTogether([layout]))
+        if severity.get("unknown", 0):
+            elements.append(
+                Paragraph(
+                    f"{severity['unknown']:,} findings are Unknown / Unrated and "
+                    "require review. Unknown does not mean low risk.",
+                    self._body_style,
+                )
+            )
         return elements
 
     def _security_domains(self, domains: list[DomainSummaryRow]) -> list[Any]:

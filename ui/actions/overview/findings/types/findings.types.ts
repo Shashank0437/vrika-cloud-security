@@ -11,6 +11,7 @@ export interface FindingsSeverityAttributes {
   medium: number;
   low: number;
   informational: number;
+  unknown?: number;
 }
 
 export interface FindingsSeverityOverview {

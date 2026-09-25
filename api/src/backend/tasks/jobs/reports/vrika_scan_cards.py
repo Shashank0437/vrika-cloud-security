@@ -280,35 +280,39 @@ def build_pass_fail_status_bar(
 
 
 def build_severity_chart(severity: dict[str, int], width: float) -> Drawing:
+    levels = ("critical", "high", "medium", "low", "informational", "unknown")
     drawing = Drawing(width, 110)
     maximum = max(
-        (severity.get(key, 0) for key in ("critical", "high", "medium", "low")),
+        (severity.get(key, 0) for key in levels),
         default=0,
     )
     count_width = max(
         51,
         max(
             stringWidth(f"{severity.get(key, 0):,}", "PlusJakartaSans", 9)
-            for key in ("critical", "high", "medium", "low")
+            for key in levels
         )
         + 8,
     )
-    track_width = width - 49 - count_width
+    label_width = 85
+    track_width = width - label_width - count_width
     for index, (key, color) in enumerate(
         [
             ("critical", "#B4233B"),
             ("high", "#D86A35"),
             ("medium", "#C39428"),
             ("low", "#4B87A7"),
+            ("informational", "#6B7280"),
+            ("unknown", "#475569"),
         ]
     ):
-        y = 86 - index * 25
+        y = 96 - index * 18
         value = severity.get(key, 0)
         drawing.add(
             String(
                 0,
                 y,
-                key.title(),
+                "Unknown / Unrated" if key == "unknown" else key.title(),
                 fontName="PlusJakartaSans",
                 fontSize=8,
                 fillColor=COLOR_MUTED,
@@ -316,7 +320,7 @@ def build_severity_chart(severity: dict[str, int], width: float) -> Drawing:
         )
         drawing.add(
             Rect(
-                49,
+                label_width,
                 y - 1,
                 track_width,
                 7,
@@ -327,7 +331,7 @@ def build_severity_chart(severity: dict[str, int], width: float) -> Drawing:
         if maximum and value:
             drawing.add(
                 Rect(
-                    49,
+                    label_width,
                     y - 1,
                     track_width * value / maximum,
                     7,

@@ -14,6 +14,7 @@ interface RiskSeverityChartProps {
   medium: number;
   low: number;
   informational: number;
+  unknown?: number;
 }
 
 export const RiskSeverityChart = ({
@@ -22,6 +23,7 @@ export const RiskSeverityChart = ({
   medium,
   low,
   informational,
+  unknown = 0,
 }: RiskSeverityChartProps) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -45,7 +47,8 @@ export const RiskSeverityChart = ({
     router.push(`/findings?${params.toString()}`);
   };
   // Calculate total findings
-  const totalFindings = critical + high + medium + low + informational;
+  const totalFindings =
+    critical + high + medium + low + informational + unknown;
 
   // Transform data to BarDataPoint format
   const chartData: BarDataPoint[] = [
@@ -74,6 +77,11 @@ export const RiskSeverityChart = ({
       value: informational,
       percentage: calculatePercentage(informational, totalFindings),
     },
+    {
+      name: "Unknown / Unrated",
+      value: unknown,
+      percentage: calculatePercentage(unknown, totalFindings),
+    },
   ];
 
   return (
@@ -88,6 +96,12 @@ export const RiskSeverityChart = ({
       <CardContent className="flex flex-1 items-center justify-start px-6">
         <HorizontalBarChart data={chartData} onBarClick={handleBarClick} />
       </CardContent>
+      {unknown > 0 && (
+        <p className="text-text-neutral-secondary px-6 pb-4 text-sm">
+          {unknown.toLocaleString()} findings are unrated and require review.
+          Unknown does not mean low risk.
+        </p>
+      )}
     </Card>
   );
 };

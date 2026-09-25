@@ -5749,7 +5749,7 @@ class ComplianceOverviewViewSet(
         description=(
             "Retrieve daily aggregated findings data grouped by severity levels over a date range. "
             "Returns one data point per day with counts of failed findings by severity (critical, high, "
-            "medium, low, informational) and muted findings. Days without scans are filled forward with "
+            "medium, low, informational, unknown/unrated) and muted findings. Days without scans are filled forward with "
             "the most recent known values. Use date_from (required) and date_to filters to specify the range."
         ),
         filters=True,
@@ -6155,6 +6155,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
                 "medium",
                 "low",
                 "informational",
+                "unknown",
                 "muted",
             )
         )
@@ -6179,6 +6180,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
                 "medium": 0,
                 "low": 0,
                 "informational": 0,
+                "unknown": 0,
                 "muted": 0,
             }
             day_scan_ids = []
@@ -6192,6 +6194,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
                         day_totals["medium"] += summary["medium"] or 0
                         day_totals["low"] += summary["low"] or 0
                         day_totals["informational"] += summary["informational"] or 0
+                        day_totals["unknown"] += summary["unknown"] or 0
                         day_totals["muted"] += summary["muted"] or 0
                         day_scan_ids.append(summary["scan_id"])
                         break  # Found the latest data for this provider
@@ -6214,6 +6217,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
             "medium": 0,
             "low": 0,
             "informational": 0,
+            "unknown": 0,
             "muted": 0,
             "scan_ids": [],
         }
@@ -6637,6 +6641,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
                 "new_failed_findings": 0,
                 "severity": {
                     "informational": 0,
+                    "unknown": 0,
                     "low": 0,
                     "medium": 0,
                     "high": 0,
@@ -6721,6 +6726,7 @@ class OverviewViewSet(ProviderFilterParamsMixin, BaseRLSViewSet):
                 "resources_count": 0,
                 "severity": {
                     "informational": 0,
+                    "unknown": 0,
                     "low": 0,
                     "medium": 0,
                     "high": 0,

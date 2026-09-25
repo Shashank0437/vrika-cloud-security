@@ -10,7 +10,7 @@
  *   `FindingViewSet.ordering_fields` (api/v1/views.py) maps `status` and
  *   `severity` straight to the Postgres ENUM columns. Postgres sorts ENUMs
  *   by DECLARATION order:
- *     severity:  critical, high, medium, low, informational  → ASC = critical first
+ *     severity: critical, high, medium, low, informational, unknown → ASC = critical first
  *     status:    FAIL, PASS, MANUAL                          → ASC = FAIL first
  *   Use the bare token. NO minus prefix on `status` or `severity`.
  *   `delta` is NOT in `ordering_fields` — sorting by delta is unsupported.
@@ -19,7 +19,7 @@
  *   `/finding-groups`, `/finding-groups/latest`, `/finding-groups/{id}/resources`
  *   `_FINDING_GROUP_SORT_MAP` and `_RESOURCE_SORT_MAP` (api/v1/views.py)
  *   REMAP the public sort keys to computed integer columns:
- *     severity  → severity_order   (5=critical … 1=informational)
+ *     severity  → severity_order   (5=critical … 1=informational, 0=unknown/unrated)
  *     status    → status_order     (3=FAIL, 2=PASS, 1=MANUAL)
  *     delta     → delta_order      (2=new, 1=changed, 0=otherwise)
  *   Higher integer = more important. PREFIX with `-` to put FAIL/critical/new first.

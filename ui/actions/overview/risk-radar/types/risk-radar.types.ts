@@ -7,6 +7,7 @@ interface OverviewResponseMeta {
 
 export interface CategorySeverity {
   informational: number;
+  unknown?: number;
   low: number;
   medium: number;
   high: number;

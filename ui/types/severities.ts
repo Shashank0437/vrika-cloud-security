@@ -4,6 +4,7 @@ export const SEVERITY_LEVELS = [
   "medium",
   "low",
   "informational",
+  "unknown",
 ] as const;
 
 export type SeverityLevel = (typeof SEVERITY_LEVELS)[number];
@@ -14,6 +15,7 @@ export const SEVERITY_DISPLAY_NAMES: Record<SeverityLevel, string> = {
   medium: "Medium",
   low: "Low",
   informational: "Informational",
+  unknown: "Unknown / Unrated",
 };
 
 // CSS variables for chart libraries (Recharts) that require inline style color values
@@ -23,6 +25,7 @@ export const SEVERITY_COLORS: Record<SeverityLevel, string> = {
   medium: "var(--color-bg-data-medium)",
   low: "var(--color-bg-data-low)",
   informational: "var(--color-bg-data-info)",
+  unknown: "var(--color-bg-data-muted)",
 };
 
 // Muted color for charts - uses CSS var() for Recharts inline style compatibility (same pattern as SEVERITY_COLORS)
@@ -35,6 +38,8 @@ export const SEVERITY_FILTER_MAP: Record<string, SeverityLevel> = {
   Low: "low",
   Info: "informational",
   Informational: "informational",
+  "Unknown / Unrated": "unknown",
+  Unknown: "unknown",
 };
 
 export interface SeverityLineConfig {
@@ -45,6 +50,11 @@ export interface SeverityLineConfig {
 
 // Pre-built line configs for charts (ordered from lowest to highest severity)
 export const SEVERITY_LINE_CONFIGS: SeverityLineConfig[] = [
+  {
+    dataKey: "unknown",
+    color: SEVERITY_COLORS.unknown,
+    label: SEVERITY_DISPLAY_NAMES.unknown,
+  },
   {
     dataKey: "informational",
     color: SEVERITY_COLORS.informational,

@@ -4,4 +4,5 @@ SEVERITY_ORDER = {
     "medium": 3,
     "low": 2,
     "informational": 1,
+    "unknown": 0,
 }

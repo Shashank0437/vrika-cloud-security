@@ -26,11 +26,15 @@ class ApiIacProvider(IacProvider):
         identifier = (
             finding.get("ID") or finding.get("VulnerabilityID") or finding.get("RuleID")
         )
-        if severity not in {item.value for item in Severity}:
-            self._record_import_error(
-                f"{identifier!r} in {file_path!r}: unsupported severity {raw_severity!r}"
+        if severity not in {item.value for item in Severity} or severity == "unknown":
+            severity = "unknown"
+            self.unrated_findings_count += 1
+            logger.warning(
+                "IaC finding %r in %r has unrated severity %r; retained as unknown",
+                identifier,
+                file_path,
+                raw_severity,
             )
-            return None
 
         try:
             report = super()._process_finding(
@@ -50,6 +54,7 @@ class ApiIacProvider(IacProvider):
         self, directory: str, scanners: list[str], exclude_path: list[str]
     ) -> Generator[list[CheckReportIAC], None, None]:
         self._import_error_count = 0
+        self.unrated_findings_count = 0
         self._import_errors: list[str] = []
         try:
             for batch in super().run_scan(directory, scanners, exclude_path):

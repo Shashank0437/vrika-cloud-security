@@ -5,6 +5,7 @@ const SEVERITY_COLORS = {
   Low: "var(--color-bg-data-low)",
   Informational: "var(--color-bg-data-info)",
   Info: "var(--color-bg-data-info)",
+  "Unknown / Unrated": "var(--color-bg-data-muted)",
   Muted: "var(--color-bg-data-muted)",
 };
 
