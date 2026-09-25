@@ -159,9 +159,9 @@ def return_prowler_provider(
 
             prowler_provider = MongodbatlasProvider
         case Provider.ProviderChoices.IAC.value:
-            from prowler.providers.iac.iac_provider import IacProvider
+            from api.iac_provider import ApiIacProvider
 
-            prowler_provider = IacProvider
+            prowler_provider = ApiIacProvider
         case Provider.ProviderChoices.ORACLECLOUD.value:
             from prowler.providers.oraclecloud.oraclecloud_provider import (
                 OraclecloudProvider,

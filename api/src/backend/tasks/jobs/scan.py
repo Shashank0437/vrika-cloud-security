@@ -1221,7 +1221,8 @@ def perform_prowler_scan(
                 or elapsed >= PROGRESS_THROTTLE_SECONDS
             ):
                 with rls_transaction(tenant_id):
-                    scan_instance.progress = progress
+                    # 100 means successful import, not merely a finished scanner.
+                    scan_instance.progress = min(progress, 99)
                     _save_scan_instance(
                         scan_instance,
                         provider_id,
@@ -1230,7 +1231,8 @@ def perform_prowler_scan(
                 last_persisted_progress = progress
                 last_persisted_progress_at = now
 
-        scan_instance.state = StateChoices.COMPLETED
+        if provider_instance.provider == Provider.ProviderChoices.IAC:
+            prowler_provider.raise_for_import_errors()
 
         # Update failed_findings_count for all resources in batches if scan completed successfully
         if resource_failed_findings_cache:
@@ -1248,10 +1250,19 @@ def perform_prowler_scan(
                     resources_to_update=resources_to_update,
                 )
 
+        scan_instance.state = StateChoices.COMPLETED
+
     except ProviderDeletedException as e:
         logger.warning(str(e))
         exception = e
         skip_final_scan_update = True
+    except SystemExit as e:
+        exception = RuntimeError(
+            f"Scanner exited before completion (exit code {e.code!r}). "
+            "See the worker log for the scanner error."
+        )
+        logger.exception("Error performing scan %s: %s", scan_id, exception)
+        scan_instance.state = StateChoices.FAILED
     except Exception as e:
         logger.error(f"Error performing scan {scan_id}: {e}")
         exception = e
@@ -1264,7 +1275,7 @@ def perform_prowler_scan(
                     scan_instance.duration = time.time() - start_time
                     scan_instance.completed_at = datetime.now(tz=UTC)
                     scan_instance.unique_resource_count = len(unique_resources)
-                    if exception is None:
+                    if scan_instance.state == StateChoices.COMPLETED:
                         scan_instance.progress = 100
                     _save_scan_instance(
                         scan_instance,

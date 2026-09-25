@@ -637,3 +637,18 @@ Resource-finding mappings created successfully.
 
 Successfully populated test data.
 ```
+
+# IaC result import failures
+
+The API uses an IaC SDK adapter to normalize recognized severity labels
+(case/whitespace and `INFO` to `informational`) without modifying raw finding
+evidence. Missing or unsupported labels, including `UNKNOWN`, are not assigned
+an arbitrary severity: their check IDs, paths, and original severity values are
+logged as import errors. Valid findings are retained, but the scan is marked
+**Failed** with an incomplete-import error, not treated as a successful clean
+scan. Up to 20 error examples are included in the task failure.
+
+SDK process exits are converted into ordinary task failures so they cannot
+terminate the Celery child and leave the scan executing at 100%. Progress stays
+below 100 until result import succeeds. Retry a failed scan after addressing
+its import errors; do not manually mark partial scans completed.
