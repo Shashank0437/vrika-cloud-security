@@ -82,7 +82,8 @@ RUN ARCH=$(uname -m) && \
 
 # Add prowler user
 RUN addgroup --gid 1000 prowler && \
-    adduser --uid 1000 --gid 1000 --disabled-password --gecos "" prowler
+    adduser --uid 1000 --gid 1000 --disabled-password --gecos "" prowler && \
+    chown -R prowler:prowler /home/prowler
 
 USER prowler
 
