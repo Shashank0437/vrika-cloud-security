@@ -33,6 +33,8 @@ class ApiConfig(AppConfig):
             signals,  # noqa: F401
         )
 
+        self._patch_image_provider()
+
         # Generate required cryptographic keys if not present, but only if:
         #   `"manage.py" not in sys.argv[0]`: If an external server (e.g., Gunicorn) is running the app
         #   `os.environ.get("RUN_MAIN")`: If it's not a Django command or using `runserver`,
@@ -41,6 +43,91 @@ class ApiConfig(AppConfig):
             "RUN_MAIN"
         ):
             self._ensure_crypto_keys()
+
+    def _patch_image_provider(self):
+        """
+        Patch ImageProvider for robust container scanning:
+        1. Support Google Artifact Registry / GCR service account JSON keys (which break
+           Trivy if passed via TRIVY_PASSWORD because Trivy splits on commas).
+        2. Use persistent Trivy cache directory (/home/prowler/.cache/trivy) instead
+           of recreating tempdirs per scan (avoids 117MB re-download each time).
+        3. Extend scan timeout default from 5m to 15m.
+        """
+        try:
+            import subprocess
+            import tempfile
+            from prowler.providers.image.image_provider import ImageProvider
+
+            def _build_trivy_env_patched(provider_self) -> tuple[dict, str | None]:
+                env_vars = dict(os.environ)
+                cleanup_file = None
+                if provider_self.registry_username and provider_self.registry_password:
+                    if provider_self.registry_username == "_json_key" or (
+                        isinstance(provider_self.registry_password, str)
+                        and "{" in provider_self.registry_password
+                        and "service_account" in provider_self.registry_password
+                    ):
+                        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+                        f.write(provider_self.registry_password)
+                        f.close()
+                        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+                        cleanup_file = f.name
+                    else:
+                        env_vars["TRIVY_USERNAME"] = provider_self.registry_username
+                        env_vars["TRIVY_PASSWORD"] = provider_self.registry_password
+                elif provider_self.registry_token:
+                    env_vars["TRIVY_REGISTRY_TOKEN"] = provider_self.registry_token
+                return env_vars, cleanup_file
+
+            ImageProvider._build_trivy_env = _build_trivy_env_patched
+
+            orig_execute_trivy = ImageProvider._execute_trivy
+
+            def _execute_trivy_patched(provider_self, command: list, image: str) -> subprocess.CompletedProcess:
+                cleanup_file = None
+                res = provider_self._build_trivy_env()
+                if isinstance(res, tuple):
+                    env_vars, cleanup_file = res
+                else:
+                    env_vars = res
+                try:
+                    logger.info(f"Scanning {image} with Trivy...")
+                    return subprocess.run(command, capture_output=True, text=True, env=env_vars)
+                finally:
+                    if cleanup_file and os.path.exists(cleanup_file):
+                        try:
+                            os.unlink(cleanup_file)
+                        except OSError:
+                            pass
+
+            ImageProvider._execute_trivy = _execute_trivy_patched
+
+            orig_init = ImageProvider.__init__
+
+            def _init_patched(provider_self, *args, **kwargs):
+                if "timeout" not in kwargs or kwargs.get("timeout") == "5m":
+                    kwargs["timeout"] = "15m"
+                orig_init(provider_self, *args, **kwargs)
+                provider_self._trivy_cache_dir = os.environ.get(
+                    "TRIVY_CACHE_DIR", "/home/prowler/.cache/trivy"
+                )
+                os.makedirs(provider_self._trivy_cache_dir, exist_ok=True)
+                provider_self._trivy_cache_dir_obj = None
+
+            ImageProvider.__init__ = _init_patched
+
+            def _cleanup_patched(provider_self):
+                if getattr(provider_self, "_trivy_cache_dir_obj", None):
+                    try:
+                        provider_self._trivy_cache_dir_obj.cleanup()
+                    except Exception:
+                        pass
+
+            ImageProvider.cleanup = _cleanup_patched
+            logger.info("ImageProvider patched for GCP Artifact Registry and persistent Trivy cache")
+        except Exception as e:
+            logger.warning(f"Could not patch ImageProvider: {e}")
+
 
     def _ensure_crypto_keys(self):
         """

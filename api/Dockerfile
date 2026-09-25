@@ -61,8 +61,8 @@ RUN ARCH=$(uname -m) && \
     chmod +x /usr/local/bin/trivy && \
     rm /tmp/trivy.tar.gz && \
     # Create trivy cache directory with proper permissions
-    mkdir -p /tmp/.cache/trivy && \
-    chmod 777 /tmp/.cache/trivy
+    mkdir -p /tmp/.cache/trivy /home/prowler/.cache/trivy && \
+    chmod 777 /tmp/.cache/trivy /home/prowler/.cache/trivy
 
 # Install zizmor for GitHub Actions workflow scanning
 RUN ARCH=$(uname -m) && \

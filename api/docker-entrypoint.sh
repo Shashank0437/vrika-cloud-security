@@ -74,6 +74,12 @@ manage_db_partitions() {
   fi
 }
 
+patch_prowler_code() {
+  if [ -f "scripts/patch_image_provider.py" ]; then
+    uv run python scripts/patch_image_provider.py || true
+  fi
+}
+
 # Identify this process to Postgres (application_name=<component>:<alias>) so
 # connections are attributable by component in pg_stat_activity. Web tiers
 # report "api"; everything else uses the launch subcommand.
@@ -82,6 +88,9 @@ case "$1" in
   *)        DJANGO_APP_COMPONENT="$1" ;;
 esac
 export DJANGO_APP_COMPONENT
+
+patch_prowler_code
+
 
 case "$1" in
   dev)
