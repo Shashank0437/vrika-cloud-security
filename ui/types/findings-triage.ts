@@ -97,6 +97,85 @@ export interface FindingTriageSummary {
   vrikaTriage?: boolean;
   disabledReason?: FindingTriageDisabledReason;
   billingHref: string;
+  resolutionReason?: string;
+}
+
+export const TRIAGE_RESOLUTION_LABELS: Record<string, string> = {
+  check_passed: "Scan passed",
+  resource_removed: "Resource removed",
+};
+
+export const TRIAGE_OBSERVATION_LABELS: Record<string, string> = {
+  observed: "Observed",
+  not_seen: "Not seen in latest scan",
+  verification_failed: "Deletion not verified",
+  resource_removed: "Deletion verified",
+  removal_confirmed: "Removal confirmed by reviewer",
+};
+
+export interface TrackedResource {
+  uid: string;
+  name: string;
+  region: string;
+  service: string;
+  type: string;
+}
+
+export interface TrackedFindingSnapshot {
+  finding_id?: string;
+  scan_id?: string;
+  observed_at?: string;
+  provider_uid?: string;
+  check_id?: string;
+  title?: string;
+  severity?: string;
+  result?: string;
+  muted?: boolean;
+  resources?: TrackedResource[];
+}
+
+export interface TrackedFindingAttributes {
+  finding_uid: string;
+  provider_id: string;
+  provider_alias: string | null;
+  provider_type: string;
+  status: FindingTriageStatus;
+  resolution_reason: string;
+  observation: string;
+  observation_detail: string;
+  snapshot: TrackedFindingSnapshot;
+  notes_count: number;
+  can_edit: boolean;
+  can_manage_exceptions: boolean;
+  updated_at: string;
+  verification_checked_at: string | null;
+  observation_scan_id: string | null;
+}
+
+export interface TrackedFinding {
+  id: string;
+  attributes: TrackedFindingAttributes;
+}
+
+export interface TrackedFindingsPage {
+  findings: TrackedFinding[];
+  hasNext: boolean;
+}
+
+export interface TrackedFindingsFilters {
+  page?: number;
+  status?: string;
+  search?: string;
+  providerId?: string;
+}
+
+export interface ConfirmFindingRemovalInput {
+  triageId: string;
+  findingId: string;
+  observationScanId: string;
+  previousStatus: FindingTriageStatus;
+  evidence: string;
+  confirmRemoved: boolean;
 }
 
 export interface FindingTriageDetail extends FindingTriageSummary {
@@ -128,6 +207,13 @@ interface FindingTriageChanges {
   status?: TriageChange<FindingTriageStatus>;
   note?: TriageChange<string>;
   reason?: string;
+  verification?: FindingTriageVerification;
+}
+
+interface FindingTriageVerification {
+  method: string;
+  evidence?: string;
+  checked_at?: string;
 }
 
 interface FindingTriageEventAttributes {

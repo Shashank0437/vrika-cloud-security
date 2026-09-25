@@ -25,6 +25,7 @@ import {
   getFindingTriageMuteInfoCopy,
   isMutelistShortcutStatus,
   isTriageStatusLocked,
+  TRIAGE_RESOLUTION_LABELS,
 } from "@/types/findings-triage";
 import type { ProviderType } from "@/types/providers";
 
@@ -246,6 +247,13 @@ export function FindingNoteModal({
               onValueChange={setSelectedStatus}
             />
           </div>
+          {triage.resolutionReason &&
+            TRIAGE_RESOLUTION_LABELS[triage.resolutionReason] && (
+              <p className="text-sm">
+                Resolution reason:{" "}
+                {TRIAGE_RESOLUTION_LABELS[triage.resolutionReason]}
+              </p>
+            )}
         </div>
 
         {isStatusLocked && (
@@ -285,7 +293,11 @@ export function FindingNoteModal({
 
         {shouldShowRemediatingInfo && (
           <Alert variant="info">
-            <AlertDescription>{REMEDIATING_INFO_COPY}.</AlertDescription>
+            <AlertDescription>
+              {REMEDIATING_INFO_COPY}.
+              {triage.vrikaTriage &&
+                " Vrika also resolves supported resources after independently verifying their removal. A missing scan result alone does not resolve a finding."}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -355,6 +367,11 @@ export function FindingNoteModal({
                   {event.attributes.changes.reason && (
                     <p className="break-words">
                       {event.attributes.changes.reason}
+                    </p>
+                  )}
+                  {event.attributes.changes.verification?.evidence && (
+                    <p className="break-words whitespace-pre-wrap">
+                      Evidence: {event.attributes.changes.verification.evidence}
                     </p>
                   )}
                   {event.attributes.changes.note && (

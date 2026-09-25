@@ -2,7 +2,8 @@
 
 import json
 from datetime import timedelta
-from unittest.mock import patch
+from unittest import TestCase as UnitTestCase
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from api.db_router import MainRouter
@@ -14,6 +15,7 @@ from api.models import (
     FindingTriageNote,
     MuteRule,
     Provider,
+    Resource,
     Role,
     Scan,
     Tenant,
@@ -260,6 +262,289 @@ class FindingTriageTests(TestCase):
             reconcile_scan_triage(self.tenant.id, failed.scan_id)
         self.assertEqual(self.record().status, "remediating")
 
+    def configure_gcp_firewall(self):
+        self.provider.provider = "gcp"
+        self.provider.uid = "triage-test-project"
+        self.provider.save()
+        self.finding.check_id = "compute_firewall_rdp_access_from_the_internet_allowed"
+        self.finding.check_metadata = {"checktitle": "Restrict public RDP"}
+        self.finding.save()
+        resource = Resource.objects.create(
+            tenant=self.tenant,
+            provider=self.provider,
+            uid="1477183571312302287",
+            name="default-allow-rdp",
+            region="global",
+            service="compute",
+            type="Firewall",
+        )
+        self.finding.resources.add(
+            resource, through_defaults={"tenant_id": self.tenant.id}
+        )
+        self.assertEqual(
+            self.write(
+                {"status": "remediating", "note": "Deleting public rule"}
+            ).status_code,
+            200,
+        )
+
+    def test_tracked_list_retains_missing_context_notes_and_history(self):
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        response = self.client.get("/api/v1/finding-triages/tracked")
+        self.assertEqual(response.status_code, 200, response.content)
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), 1)
+        attrs = rows[0]["attributes"]
+        self.assertEqual(attrs["status"], "remediating")
+        self.assertEqual(attrs["observation"], "not_seen")
+        self.assertEqual(attrs["snapshot"]["resources"][0]["name"], "default-allow-rdp")
+        triage_id = self.record().id
+        self.finding.delete()
+        url = f"/api/v1/finding-triages/{triage_id}"
+        self.assertEqual(self.write({"note": "Still retained"}, url).status_code, 200)
+        self.assertEqual(self.client.get(f"{url}/history").status_code, 200)
+        self.assertEqual(
+            self.client.get(f"{url}/notes").json()["data"][0]["attributes"]["body"],
+            "Still retained",
+        )
+        attrs = self.client.get("/api/v1/finding-triages/tracked").json()["data"][0][
+            "attributes"
+        ]
+        self.assertEqual(attrs["snapshot"]["title"], "Restrict public RDP")
+
+    def test_verified_removal_preserves_fail_and_reopens_on_return(self):
+        from api.triage_removal import verify_missing_resources
+
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        with patch("api.triage_removal.list_gcp_firewalls", return_value={}):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        triage = self.record()
+        self.assertEqual(triage.status, "resolved")
+        self.assertEqual(triage.resolution_reason, "resource_removed")
+        self.assertEqual(triage.last_result, "FAIL")
+        self.assertEqual(triage.snapshot["result"], "FAIL")
+        self.finding.refresh_from_db()
+        self.assertEqual(self.finding.status, "FAIL")
+        self.assertEqual(
+            FindingTriageEvent.objects.filter(kind="verification").count(), 1
+        )
+        self.assertEqual(FindingTriageNote.objects.get().body, "Deleting public rule")
+        returned = self.snapshot("FAIL", 2)
+        reconcile_scan_triage(self.tenant.id, returned.scan_id)
+        self.assertEqual(self.record().status, "reopened")
+        self.assertEqual(self.record().resolution_reason, "")
+
+    def test_verification_errors_present_and_scoped_scans_do_not_close(self):
+        from api.triage_removal import VerificationError, verify_missing_resources
+
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        with patch(
+            "api.triage_removal.list_gcp_firewalls",
+            side_effect=VerificationError("Cloud inventory could not be read."),
+        ):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.record().status, "remediating")
+        self.assertEqual(self.record().observation, "verification_failed")
+        with patch(
+            "api.triage_removal.list_gcp_firewalls",
+            return_value={"default-allow-rdp": "1477183571312302287"},
+        ):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.record().status, "remediating")
+        self.assertEqual(self.record().observation, "not_seen")
+        missing.scan.scanner_args = {"checks": ["unrelated_check"]}
+        missing.scan.save()
+        with patch("api.triage_removal.list_gcp_firewalls") as inventory:
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        inventory.assert_not_called()
+        self.assertEqual(self.record().status, "remediating")
+
+    def test_newer_scan_during_verification_blocks_stale_closure(self):
+        from api.triage_removal import verify_missing_resources
+
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+
+        def inventory(_provider):
+            self.snapshot("FAIL", 2)
+            return {}
+
+        with patch("api.triage_removal.list_gcp_firewalls", side_effect=inventory):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.record().status, "remediating")
+        self.assertFalse(
+            FindingTriageEvent.objects.filter(kind="verification").exists()
+        )
+
+    def test_tracked_filters_visibility_and_disabled_feature(self):
+        self.configure_gcp_firewall()
+        for query, expected in [
+            ("filter[status]=remediating", 1),
+            ("filter[status]=resolved", 0),
+            ("filter[search]=default-allow-rdp", 1),
+            ("filter[provider_id]=" + str(uuid4()), 0),
+        ]:
+            response = self.client.get("/api/v1/finding-triages/tracked?" + query)
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertEqual(len(response.json()["data"]), expected)
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/finding-triages/tracked?filter[status]=bogus"
+            ).status_code,
+            400,
+        )
+        self.role.unlimited_visibility = False
+        self.role.save()
+        self.assertEqual(
+            self.client.get("/api/v1/finding-triages/tracked").json()["data"], []
+        )
+        with override_settings(VRIKA_TRIAGE_ENABLED=False):
+            self.assertEqual(
+                self.client.get("/api/v1/finding-triages/tracked").status_code, 404
+            )
+
+    def test_replacement_or_unknown_identity_is_not_closed(self):
+        from api.triage_removal import verify_missing_resources
+
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        with patch(
+            "api.triage_removal.list_gcp_firewalls",
+            return_value={"default-allow-rdp": "99999"},
+        ):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.record().status, "remediating")
+        self.provider.uid = "different-project"
+        self.provider.save()
+        with patch("api.triage_removal.list_gcp_firewalls") as inventory:
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        inventory.assert_not_called()
+        self.assertEqual(self.record().status, "remediating")
+
+    def test_backfill_legacy_context_and_out_of_order_results_after_removal(self):
+        from api.triage_removal import verify_missing_resources
+        from django.core.management import call_command
+
+        self.configure_gcp_firewall()
+        triage = self.record()
+        triage.snapshot = {}
+        triage.save()
+        missing = self.snapshot("PASS", 2, uid="different-finding")
+        call_command("backfill_triage_tracking", tenant_id=self.tenant.id, verbosity=0)
+        self.assertEqual(self.record().snapshot["scan_id"], str(self.finding.scan_id))
+        with patch("api.triage_removal.list_gcp_firewalls", return_value={}):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.record().resolution_reason, "resource_removed")
+        late_fail = self.snapshot("FAIL", 1)
+        reconcile_scan_triage(self.tenant.id, late_fail.scan_id)
+        self.assertEqual(self.record().status, "resolved")
+        self.assertEqual(self.record().resolution_reason, "resource_removed")
+
+    def test_backfill_applies_an_intermediate_pass_before_a_missing_scan(self):
+        from django.core.management import call_command
+
+        self.configure_gcp_firewall()
+        self.snapshot("PASS", 1)
+        self.snapshot("PASS", 2, uid="different-finding")
+        call_command("backfill_triage_tracking", tenant_id=self.tenant.id, verbosity=0)
+        self.assertEqual(self.record().status, "resolved")
+        self.assertEqual(self.record().resolution_reason, "check_passed")
+
+    def test_pass_preserves_manual_remediation_history_and_resolution_reason(self):
+        self.write({"status": "remediating", "note": "Fixing configuration"})
+        passed = self.snapshot("PASS", 1)
+        reconcile_scan_triage(self.tenant.id, passed.scan_id)
+        self.assertEqual(self.record().resolution_reason, "check_passed")
+        changes = list(
+            FindingTriageEvent.objects.filter(triage=self.record()).values_list(
+                "changes", flat=True
+            )
+        )
+        self.assertTrue(
+            any(
+                change.get("status") == {"from": "open", "to": "remediating"}
+                for change in changes
+            )
+        )
+        self.assertTrue(
+            any(
+                change.get("status") == {"from": "remediating", "to": "resolved"}
+                for change in changes
+            )
+        )
+        self.assertEqual(FindingTriageNote.objects.get().body, "Fixing configuration")
+
+    def test_removal_then_pass_records_the_new_resolution_evidence(self):
+        from api.triage_removal import verify_missing_resources
+
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        with patch("api.triage_removal.list_gcp_firewalls", return_value={}):
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        returned = self.snapshot("PASS", 2)
+        reconcile_scan_triage(self.tenant.id, returned.scan_id)
+        self.assertEqual(self.record().resolution_reason, "check_passed")
+        event = FindingTriageEvent.objects.filter(
+            triage=self.record(), scan_id=returned.scan_id
+        ).get()
+        self.assertEqual(
+            event.changes["resolution_reason"],
+            {
+                "from": "resource_removed",
+                "to": "check_passed",
+            },
+        )
+
+    def test_task_queues_verification_only_when_enabled(self):
+        from tasks.tasks import reconcile_finding_triage_task
+
+        self.write({"status": "remediating"})
+        with patch("tasks.tasks.verify_missing_triage_resources_task.delay") as verify:
+            reconcile_finding_triage_task.run(
+                str(self.tenant.id), str(self.finding.scan_id)
+            )
+            verify.assert_called_once_with(
+                tenant_id=str(self.tenant.id), scan_id=str(self.finding.scan_id)
+            )
+            verify.reset_mock()
+            with override_settings(VRIKA_TRIAGE_ENABLED=False):
+                reconcile_finding_triage_task.run(
+                    str(self.tenant.id), str(self.finding.scan_id)
+                )
+            verify.assert_not_called()
+
+    def test_unsupported_provider_does_not_attempt_cloud_verification(self):
+        from api.triage_removal import verify_missing_resources
+
+        self.write({"status": "remediating"})
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        with patch("api.triage_removal.list_gcp_firewalls") as inventory:
+            verify_missing_resources(self.tenant.id, missing.scan_id)
+        inventory.assert_not_called()
+        self.assertEqual(self.record().status, "remediating")
+        self.assertIn("not available", self.record().observation_detail)
+
+    def test_resource_mapping_cleanup_does_not_erase_retained_identity(self):
+        self.configure_gcp_firewall()
+        Resource.objects.filter(tenant=self.tenant, uid="1477183571312302287").delete()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.write({"note": "Context retained"}).status_code, 200)
+        self.assertEqual(
+            self.record().snapshot["resources"][0]["uid"], "1477183571312302287"
+        )
+
     def test_out_of_order_completion_observes_intermediate_pass(self):
         self.write({"status": "remediating"})
         passed = self.snapshot("PASS", 1)
@@ -386,6 +671,147 @@ class FindingTriageTests(TestCase):
         )
         self.assertFalse(FindingTriage.objects.exists())
 
+    def confirm_removal(self, triage=None, **overrides):
+        triage = triage or self.record()
+        attributes = {
+            "previous_status": triage.status,
+            "observation_scan_id": str(triage.observation_scan_id),
+            "finding_id": triage.snapshot.get("finding_id"),
+            "confirm_removed": True,
+            "evidence": "Confirmed deletion in the cloud console; change request CHG-123.",
+            **overrides,
+        }
+        return self.client.patch(
+            f"/api/v1/finding-triages/{triage.id}/confirm-removal",
+            data=json.dumps(
+                {
+                    "data": {
+                        "type": "finding-triages",
+                        "id": str(triage.id),
+                        "attributes": attributes,
+                    }
+                }
+            ),
+            content_type="application/vnd.api+json",
+        )
+
+    def test_reviewer_removal_confirmation_works_for_every_provider(self):
+        self.role.manage_triage_exceptions = True
+        self.role.save()
+        provider_uids = {
+            "aws": "999999999999",
+            "azure": str(uuid4()),
+            "gcp": "review-project",
+            "kubernetes": "review-cluster",
+            "m365": "review.example.com",
+            "github": "review-org",
+            "mongodbatlas": "a" * 24,
+            "iac": "https://example.com/review.git",
+            "oraclecloud": "ocid1.tenancy.oc1..review123",
+            "alibabacloud": "1" * 16,
+            "cloudflare": "a" * 32,
+            "openstack": "review-project",
+            "image": "review-image:latest",
+            "googleworkspace": "C12345678",
+            "vercel": "team_" + "a" * 16,
+            "okta": "review.okta.com",
+        }
+        for provider_type in Provider.ProviderChoices.values:
+            with self.subTest(provider=provider_type):
+                provider = Provider.objects.create(
+                    tenant=self.tenant,
+                    provider=provider_type,
+                    uid=provider_uids[provider_type],
+                )
+                finding = self.snapshot(
+                    "FAIL", 0, uid=f"issue-{provider_type}", provider=provider
+                )
+                resource = Resource.objects.create(
+                    tenant=self.tenant,
+                    provider=provider,
+                    uid="resource-id",
+                    name="Removed resource",
+                    region="region",
+                    service="any-service",
+                    type="any-type",
+                )
+                finding.resources.add(
+                    resource, through_defaults={"tenant_id": self.tenant.id}
+                )
+                self.assertEqual(
+                    self.write(
+                        {"status": "remediating", "note": "Working"}, self.url(finding)
+                    ).status_code,
+                    200,
+                )
+                missing = self.snapshot("PASS", 1, uid="other-issue", provider=provider)
+                reconcile_scan_triage(self.tenant.id, missing.scan_id)
+                triage = FindingTriage.objects.get(
+                    provider=provider, finding_uid=finding.uid
+                )
+                with patch("api.triage_removal.list_gcp_firewalls") as cloud:
+                    response = self.confirm_removal(triage)
+                self.assertEqual(response.status_code, 200, response.content)
+                cloud.assert_not_called()
+                triage.refresh_from_db()
+                self.assertEqual(triage.status, "resolved")
+                self.assertEqual(triage.observation, "removal_confirmed")
+                self.assertEqual(triage.last_result, "FAIL")
+                finding.refresh_from_db()
+                self.assertEqual(finding.status, "FAIL")
+                event = triage.events.get(kind="verification")
+                self.assertEqual(event.actor_id, self.user.id)
+                self.assertEqual(
+                    event.changes["verification"]["method"], "reviewer_confirmation"
+                )
+                self.assertIn("CHG-123", event.changes["verification"]["evidence"])
+                self.assertEqual(triage.note.body, "Working")
+                returned = self.snapshot("FAIL", 2, uid=finding.uid, provider=provider)
+                reconcile_scan_triage(self.tenant.id, returned.scan_id)
+                triage.refresh_from_db()
+                self.assertEqual(triage.status, "reopened")
+
+    def test_removal_confirmation_requires_permissions_evidence_and_consent(self):
+        self.configure_gcp_firewall()
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.confirm_removal().status_code, 403)
+        self.role.manage_triage_exceptions = True
+        self.role.save()
+        for changes in (
+            {"confirm_removed": False},
+            {"evidence": " "},
+            {"evidence": "x" * 501},
+            {"status": "resolved"},
+        ):
+            self.assertEqual(self.confirm_removal(**changes).status_code, 400)
+        self.assertEqual(self.record().status, "remediating")
+        self.assertFalse(self.record().events.filter(kind="verification").exists())
+        self.role.unlimited_visibility = False
+        self.role.save()
+        self.assertEqual(self.confirm_removal().status_code, 404)
+
+    def test_removal_confirmation_rejects_observed_scoped_and_stale_findings(self):
+        self.configure_gcp_firewall()
+        self.role.manage_triage_exceptions = True
+        self.role.save()
+        self.assertEqual(self.confirm_removal().status_code, 400)
+        missing = self.snapshot("PASS", 1, uid="different-finding")
+        missing.scan.scanner_args = {"checks": ["unrelated"]}
+        missing.scan.save()
+        reconcile_scan_triage(self.tenant.id, missing.scan_id)
+        self.assertEqual(self.confirm_removal().status_code, 400)
+        missing.scan.scanner_args = {}
+        missing.scan.save()
+        self.assertEqual(self.confirm_removal(previous_status="open").status_code, 409)
+        self.assertEqual(self.confirm_removal(finding_id=str(uuid4())).status_code, 409)
+        self.assertEqual(
+            self.confirm_removal(observation_scan_id=str(uuid4())).status_code, 409
+        )
+        self.assertEqual(self.confirm_removal().status_code, 200)
+        self.assertEqual(self.confirm_removal().status_code, 409)
+        self.assertEqual(self.record().events.filter(kind="verification").count(), 1)
+
 
 @override_settings(VRIKA_TRIAGE_ENABLED=True)
 class ConcurrentTriageTests(TransactionTestCase):
@@ -462,3 +888,100 @@ class ConcurrentTriageTests(TransactionTestCase):
         self.assertEqual(FindingTriageNote.objects.count(), 1)
         self.assertEqual(FindingTriageEvent.objects.filter(kind="status").count(), 1)
         self.assertEqual(callback.call_count, 1)
+
+
+class GcpRemovalInventoryTests(UnitTestCase):
+    def inventory(self, pages, secret=None):
+        from types import SimpleNamespace
+
+        from api.triage_removal import list_gcp_firewalls
+
+        provider = SimpleNamespace(
+            uid="test-project",
+            id="provider",
+            tenant_id="tenant",
+            secret=SimpleNamespace(
+                secret=secret
+                if secret is not None
+                else {"service_account_key": {"type": "service_account"}}
+            ),
+        )
+        client = MagicMock()
+        client.firewalls.return_value.list.return_value.execute.side_effect = pages
+        with (
+            patch(
+                "api.triage_removal.google.auth.load_credentials_from_dict",
+                return_value=(MagicMock(), None),
+            ),
+            patch("api.triage_removal.AuthorizedHttp"),
+            patch("api.triage_removal.build", return_value=client),
+        ):
+            result = list_gcp_firewalls(provider)
+        client.close.assert_called_once()
+        return result, client
+
+    def test_reads_every_page_and_accepts_authoritative_empty_inventory(self):
+        result, client = self.inventory(
+            [
+                {
+                    "kind": "compute#firewallList",
+                    "items": [{"name": "rule-one", "id": "123"}],
+                    "nextPageToken": "page2",
+                },
+                {
+                    "kind": "compute#firewallList",
+                    "items": [{"name": "rule-two", "id": "456"}],
+                },
+            ]
+        )
+        self.assertEqual(result, {"rule-one": "123", "rule-two": "456"})
+        self.assertEqual(
+            client.firewalls.return_value.list.call_args_list[1].kwargs["pageToken"],
+            "page2",
+        )
+        self.assertEqual(
+            client.firewalls.return_value.list.call_args_list[0].kwargs["project"],
+            "test-project",
+        )
+        result, _ = self.inventory([{"kind": "compute#firewallList"}])
+        self.assertEqual(result, {})
+
+    def test_does_not_accept_partial_error_or_malformed_inventory(self):
+        from api.triage_removal import VerificationError
+        from googleapiclient.errors import HttpError
+        from httplib2 import Response
+
+        for pages in [
+            [{}],
+            [{"kind": "compute#firewallList", "warning": "invalid-warning"}],
+            [
+                {
+                    "kind": "compute#firewallList",
+                    "error": {"message": "Partial response"},
+                }
+            ],
+            [{"kind": "compute#firewallList", "items": [{"name": "rule-one"}]}],
+            [{"kind": "compute#firewallList", "warning": {"code": "UNREACHABLE"}}],
+            [
+                {"kind": "compute#firewallList", "nextPageToken": "same"},
+                {"kind": "compute#firewallList", "nextPageToken": "same"},
+            ],
+            [
+                {"kind": "compute#firewallList", "nextPageToken": "page2"},
+                HttpError(Response({"status": "403"}), b"Forbidden"),
+            ],
+            [TimeoutError("Timed out")],
+            [HttpError(Response({"status": "404"}), b"Project not found")],
+        ]:
+            with self.subTest(pages=pages), self.assertRaises(VerificationError):
+                self.inventory(pages)
+
+    def test_never_falls_back_to_host_credentials(self):
+        from api.triage_removal import VerificationError
+
+        with (
+            patch("google.auth.default") as default,
+            self.assertRaises(VerificationError),
+        ):
+            self.inventory([], secret={})
+        default.assert_not_called()

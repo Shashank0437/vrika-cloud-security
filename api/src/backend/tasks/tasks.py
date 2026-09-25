@@ -709,7 +709,23 @@ def perform_scan_summary_task(tenant_id: str, scan_id: str):
 def reconcile_finding_triage_task(tenant_id: str, scan_id: str):
     from api.triage import reconcile_scan_triage
 
-    return reconcile_scan_triage(tenant_id, scan_id)
+    result = reconcile_scan_triage(tenant_id, scan_id)
+    if result.get("enabled"):
+        verify_missing_triage_resources_task.delay(tenant_id=tenant_id, scan_id=scan_id)
+    return result
+
+
+@shared_task(
+    base=RLSTask,
+    name="scan-triage-resource-verification",
+    queue="overview",
+    soft_time_limit=240,
+    time_limit=300,
+)
+def verify_missing_triage_resources_task(tenant_id: str, scan_id: str):
+    from api.triage_removal import verify_missing_resources
+
+    return verify_missing_resources(tenant_id, scan_id)
 
 
 class AttackPathsScanRLSTask(RLSTask):

@@ -24,6 +24,7 @@ interface VrikaTriageAttributes {
   can_edit: boolean;
   can_manage_exceptions: boolean;
   finding_uid: string;
+  resolution_reason?: string;
 }
 
 interface FindingTriageAttributes {
@@ -133,6 +134,9 @@ const createSummary = (
           vrikaTriage: true,
           canManageExceptions:
             attributes.triage?.can_manage_exceptions === true,
+          ...(attributes.triage?.resolution_reason
+            ? { resolutionReason: attributes.triage.resolution_reason }
+            : {}),
         }
       : {}),
     billingHref: options.billingHref ?? FINDING_TRIAGE_BILLING_HREF,

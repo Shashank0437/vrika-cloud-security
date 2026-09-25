@@ -30,7 +30,7 @@ previous text in the organization-private audit history.
 
 The feature is **off by default**. For an approved deployment:
 
-1. Apply migrations through `0100_triage_managed_roles` using the normal admin
+1. Apply migrations through `0101_triage_tracking` using the normal admin
    database migration procedure, and deploy the matching Vrika bridge templates.
 2. Set `VRIKA_TRIAGE_ENABLED=true` for API and scan/overview workers.
 3. Build the UI with `NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED=true` (Docker build arg).
@@ -49,6 +49,75 @@ note ID. UID aliases are accepted only when they identify one visible provider.
 Stale edits are rejected with a refresh instruction rather than overwriting newer
 triage decisions. Expected API errors cross the UI server-action boundary as
 structured results so production rendering does not hide that instruction.
+
+### Tracked findings and verified removal
+
+`GET /finding-triages/tracked` lists findings with a human status-change or note
+event, regardless of whether the latest scan contains them. It supports JSON:API
+pagination and `filter[status]`, `filter[provider_id]`, and `filter[search]`.
+Tenant isolation and provider-group visibility are unchanged. Minimal finding
+context (title, result, resource identities, provider UID, last-observed scan/time)
+is retained separately from scan snapshots. Notes and history remain readable and
+editable by permitted users after snapshot retention. Creating a mute rule still
+requires a retained scan finding.
+
+Completed scans retain context and mark absent tracked findings as `not_seen`.
+The separate `scan-triage-resource-verification` task, on the `overview` queue,
+may close unresolved tracked findings with reason `resource_removed`. Initial
+support is limited to the GCP Compute firewall public-RDP and public-SSH checks.
+It uses only the connected provider's credentials, never host/default credentials,
+and reads every page of `compute.firewalls.list` for the saved project. A complete
+successful inventory must contain neither the saved immutable rule ID nor its
+name. The name guard prevents closing an issue when a replacement rule exists.
+This requires `compute.firewalls.list`; do not grant cloud write access.
+
+Failed, imported, or scoped scans do not trigger closure. Unknown resource types,
+missing identity, changed provider/project, failed permissions, malformed/partial
+inventory, and request failures leave the triage status unchanged with an explicit
+observation explanation. Verification errors are logged without raw cloud responses
+or credentials. A newer completed scan or changed provider invalidates in-flight
+verification. Repeated verification cannot duplicate a closure event.
+
+Resolution records its evidence, time, and reason in history. It does **not**
+rewrite historical FAIL results, add PASS findings, change current scan counts,
+or unmute rules. A subsequent FAIL reopens a removal-resolved finding; out-of-order
+older scans cannot reopen it. PASS-based resolution uses reason `check_passed`.
+The UI link **Findings > Tracked findings & history** exposes both reasons.
+
+#### Provider-independent reviewer confirmation
+
+For every provider and resource type, an authorized reviewer can use **Confirm
+resource removal** on a missing tracked finding. This requires both `manage_triage`
+and `manage_triage_exceptions` (the existing admin/exception authority), an explicit
+confirmation, and 3-500 characters of evidence. It is a reviewer attestation, **not**
+an automatic cloud verification and not a Manual Pass attestation.
+
+`PATCH /finding-triages/{id}/confirm-removal` uses JSON:API type `finding-triages`,
+the triage ID as `data.id`, and attributes `previous_status`,
+`observation_scan_id`, `finding_id`, `confirm_removed`, and `evidence`.
+The finding must be absent from the latest completed full-scope scan, with retained
+resource identities in the same provider. Changed scan/finding context or status
+returns 409; observed findings, scoped scans, and incomplete identities cannot be
+confirmed. Direct manual selection of Resolved remains disallowed.
+
+The workflow closes as `resource_removed` with observation `removal_confirmed`.
+History identifies the reviewer, timestamp, evidence, provider/resource identities,
+and method `reviewer_confirmation`, distinct from automatic inventory verification.
+No cloud API is called by this action. Raw FAIL results, notes, and mute rules are
+preserved. A later FAIL reopens the finding on every provider.
+
+When upgrading, before scan-retention cleanup, backfill each tenant's existing
+tracked context using the normal API environment:
+
+```bash
+python manage.py backfill_triage_tracking --tenant-id <tenant-uuid>
+```
+
+Add `--verify-removed` to queue read-only verification for the latest completed
+scans; the normal task still enforces full scan scope and supported identities.
+Without that option the command makes no cloud API calls. Already-expired
+snapshots cannot be reconstructed; notes/history remain retained, but unknown
+resource identities are never automatically closed.
 
 ## Executive and full PDF layout
 

@@ -38,6 +38,89 @@ describe("findings triage actions", () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
   });
 
+  it("confirms removal through the audited endpoint without sending a PASS or manual status update", async () => {
+    const server = await import("./findings-triage.server");
+    handleApiResponseMock.mockResolvedValue({ data: { id: "triage" } });
+    const id = "d2f8f3e0-e272-4888-8ea2-6eceb87d8e30";
+    const result = await server.confirmFindingRemoval({
+      triageId: id,
+      findingId: id,
+      observationScanId: id,
+      previousStatus: "remediating",
+      evidence: "  Change CHG-123 confirms removal  ",
+      confirmRemoved: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      `/finding-triages/${id}/confirm-removal`,
+    );
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.data.attributes).toEqual({
+      finding_id: id,
+      observation_scan_id: id,
+      previous_status: "remediating",
+      evidence: "Change CHG-123 confirms removal",
+      confirm_removed: true,
+    });
+  });
+
+  it("does not submit removal without consent and surfaces stale confirmation errors", async () => {
+    const server = await import("./findings-triage.server");
+    const id = "d2f8f3e0-e272-4888-8ea2-6eceb87d8e30";
+    const input = {
+      triageId: id,
+      findingId: id,
+      observationScanId: id,
+      previousStatus: FINDING_TRIAGE_STATUS.REMEDIATING,
+      evidence: "Confirmed removal",
+      confirmRemoved: false,
+    };
+    expect((await server.confirmFindingRemoval(input)).ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    handleApiResponseMock.mockResolvedValue({
+      error: "Scan evidence changed; refresh.",
+      status: 409,
+    });
+    const { confirmFindingRemoval } = await importActions();
+    await expect(
+      confirmFindingRemoval({ ...input, confirmRemoved: true }),
+    ).rejects.toThrow("Scan evidence changed; refresh.");
+  });
+
+  it("loads tracked findings with encoded filters and pagination", async () => {
+    const server = await import("./findings-triage.server");
+    handleApiResponseMock.mockResolvedValue({
+      data: [],
+      links: { next: "/next-page" },
+    });
+    await expect(
+      server.loadTrackedFindings({
+        page: 2,
+        search: "rdp & ssh",
+        status: "remediating",
+      }),
+    ).resolves.toEqual({ ok: true, value: { findings: [], hasNext: true } });
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.pathname).toBe("/api/v1/finding-triages/tracked");
+    expect(url.searchParams.get("filter[search]")).toBe("rdp & ssh");
+    expect(url.searchParams.get("page[number]")).toBe("2");
+    expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
+  });
+
+  it("rejects invalid tracked filters and malformed API payloads explicitly", async () => {
+    const server = await import("./findings-triage.server");
+    expect((await server.loadTrackedFindings({ page: -1 })).ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    handleApiResponseMock.mockResolvedValue({
+      data: [{ id: "missing-attributes" }],
+    });
+    await expect(server.loadTrackedFindings()).resolves.toEqual({
+      ok: false,
+      message: "Could not load tracked findings. The API response was invalid.",
+    });
+  });
+
   it("returns a serializable conflict across the server-action boundary", async () => {
     vi.stubEnv("NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED", "true");
     const server = await import("./findings-triage.server");

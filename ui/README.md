@@ -2,6 +2,29 @@
 
 This repository hosts the UI component for Prowler, providing a user-friendly web interface to interact seamlessly with Prowler's features.
 
+## Vrika tracked findings
+
+With `NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED=true`, **Findings > Tracked findings &
+history** opens `/findings/triage`. This view lists findings your team has changed
+or annotated, including findings missing from current scans and resolved items.
+It supports status/search filters, pagination, existing triage permissions, notes,
+and audit history. Historical FAIL results remain clearly labeled even when the
+workflow is resolved because a resource was removed.
+
+The matching API requires migration `0101_triage_tracking` and the tracked-context
+backfill described in `api/README.md`. Removal is not inferred by the UI. The API
+initially verifies GCP Compute public-RDP/public-SSH firewall findings; unsupported
+or inconclusive cases remain visible as not seen or deletion not verified.
+Other providers still receive persistent tracking and ordinary PASS-based resolution.
+
+Authorized reviewers (Manage Triage plus Manage Triage Exceptions) can use
+**Confirm resource removal** for missing findings on **every provider**, including
+AWS, Azure, GCP, and other supported providers. This requires explicit confirmation
+and evidence, records who confirmed it, and is labeled **Removal confirmed by
+reviewer**, not automatic cloud verification. A newer scan or changed finding
+requires refreshing before confirmation. Normal users retain history visibility;
+they cannot use this exception action. No historical FAIL is converted into PASS.
+
 ## 🚀 Production deployment
 
 ### Docker deployment

@@ -1,15 +1,23 @@
 "use server";
 
 import { adaptLatestFindingTriageNote } from "@/actions/findings/findings-triage.adapter";
+import {
+  removalConfirmationSchema,
+  trackedFindingsFiltersSchema,
+  trackedFindingsResponseSchema,
+} from "@/actions/findings/tracked-findings.schema";
 import { createMuteRule } from "@/actions/mute-rules";
 import { apiBaseUrl, getAuthHeaders } from "@/lib";
 import { handleApiResponse } from "@/lib/server-actions-helper";
 import {
+  type ConfirmFindingRemovalInput,
   FINDING_TRIAGE_STATUS_LABELS,
   type FindingTriageHistory,
   type FindingTriageLoadedNote,
   type FindingTriageSummary,
   isMutelistShortcutStatus,
+  type TrackedFindingsFilters,
+  type TrackedFindingsPage,
   type TriageActionResult,
   type UpdateFindingTriageInput,
 } from "@/types/findings-triage";
@@ -78,6 +86,7 @@ async function getJsonApi(path: `/${string}`) {
   const headers = await getAuthHeaders({ contentType: false });
   const response = await fetch(buildApiUrl(path), {
     headers,
+    cache: "no-store",
   });
 
   const result = await handleApiResponse(response);
@@ -348,4 +357,66 @@ export async function loadFindingTriageHistory(
   page = 1,
 ): Promise<TriageActionResult<FindingTriageHistory>> {
   return actionResult(() => loadFindingTriageHistoryImpl(triage, page));
+}
+
+export async function confirmFindingRemoval(
+  input: ConfirmFindingRemovalInput,
+): Promise<TriageActionResult<void>> {
+  return actionResult(async () => {
+    const parsed = removalConfirmationSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new TriageRequestError(
+        "Confirm removal, provide evidence of 3-500 characters, and refresh stale finding details.",
+      );
+    }
+    const data = parsed.data;
+    await patchJsonApi(`/finding-triages/${data.triageId}/confirm-removal`, {
+      data: {
+        type: "finding-triages",
+        id: data.triageId,
+        attributes: {
+          previous_status: data.previousStatus,
+          finding_id: data.findingId,
+          observation_scan_id: data.observationScanId,
+          evidence: data.evidence,
+          confirm_removed: data.confirmRemoved,
+        },
+      },
+    });
+  });
+}
+
+export async function loadTrackedFindings(
+  filters: TrackedFindingsFilters = {},
+): Promise<TriageActionResult<TrackedFindingsPage>> {
+  return actionResult(async () => {
+    const parsed = trackedFindingsFiltersSchema.safeParse(filters);
+    if (!parsed.success) {
+      throw new TriageRequestError(
+        "Invalid tracked-findings filters. Check the page, status, provider, or search.",
+      );
+    }
+
+    const { page, status, search, providerId } = parsed.data;
+    const params = new URLSearchParams({
+      "page[number]": String(page),
+      "page[size]": "20",
+    });
+    if (status) params.set("filter[status]", status);
+    if (search) params.set("filter[search]", search);
+    if (providerId) params.set("filter[provider_id]", providerId);
+    const response = trackedFindingsResponseSchema.safeParse(
+      await getJsonApi(`/finding-triages/tracked?${params}`),
+    );
+    if (!response.success) {
+      console.error("Invalid tracked-findings response.", response.error);
+      throw new TriageRequestError(
+        "Could not load tracked findings. The API response was invalid.",
+      );
+    }
+    return {
+      findings: response.data.data,
+      hasNext: Boolean(response.data.links?.next),
+    };
+  });
 }

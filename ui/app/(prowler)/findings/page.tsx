@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import {
@@ -15,6 +16,7 @@ import {
   FindingsGroupTable,
   SkeletonTableFindings,
 } from "@/components/findings/table";
+import { Button } from "@/components/shadcn/button/button";
 import { ContentLayout } from "@/components/shadcn/content-layout";
 import { FilterTransitionWrapper } from "@/contexts";
 import {
@@ -98,6 +100,13 @@ export default async function Findings({
       onboardingAction={onboardingAction}
     >
       <FilterTransitionWrapper>
+        {process.env.NEXT_PUBLIC_VRIKA_TRIAGE_ENABLED === "true" && (
+          <div className="mb-4 flex justify-end">
+            <Button asChild variant="outline">
+              <Link href="/findings/triage">Tracked findings & history</Link>
+            </Button>
+          </div>
+        )}
         <div className="mb-6">
           <FindingsFilters
             providers={providersData?.data || []}

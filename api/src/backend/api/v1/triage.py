@@ -5,15 +5,19 @@ from api.models import FindingTriage, FindingTriageEvent, FindingTriageNote
 from api.rbac.permissions import get_providers, get_role
 from api.triage import (
     MANUAL_STATUSES,
+    confirm_resource_removal,
     resolve_finding,
     update_triage,
     visible_findings,
 )
+from api.triage_tracking import tracked_triages
 from api.v1.serializers import RLSSerializer
 from django.conf import settings
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework_json_api import serializers
@@ -24,6 +28,8 @@ class TriageSerializer(RLSSerializer):
     provider_id = serializers.UUIDField(read_only=True)
 
     def get_notes_count(self, obj) -> int:
+        if hasattr(obj, "notes_count"):
+            return obj.notes_count
         return FindingTriageNote.objects.filter(
             tenant_id=obj.tenant_id, triage=obj
         ).count()
@@ -35,6 +41,7 @@ class TriageSerializer(RLSSerializer):
             "finding_uid",
             "provider_id",
             "status",
+            "resolution_reason",
             "notes_count",
             "inserted_at",
             "updated_at",
@@ -43,6 +50,41 @@ class TriageSerializer(RLSSerializer):
 
     class JSONAPIMeta:
         resource_name = "finding-triages"
+
+
+class TrackedTriageSerializer(TriageSerializer):
+    provider_alias = serializers.CharField(
+        source="provider.alias", read_only=True, allow_null=True
+    )
+    provider_type = serializers.CharField(source="provider.provider", read_only=True)
+    can_edit = serializers.SerializerMethodField()
+    can_manage_exceptions = serializers.SerializerMethodField()
+
+    def _role(self):
+        if "_triage_role" not in self.context:
+            request = self.context["request"]
+            self.context["_triage_role"] = get_role(request.user, request.tenant_id)
+        return self.context["_triage_role"]
+
+    def get_can_edit(self, obj) -> bool:
+        return self._role().manage_triage
+
+    def get_can_manage_exceptions(self, obj) -> bool:
+        return self._role().manage_triage and self._role().manage_triage_exceptions
+
+    class Meta(TriageSerializer.Meta):
+        fields = TriageSerializer.Meta.fields + [
+            "snapshot",
+            "observation",
+            "observation_detail",
+            "observation_scan_id",
+            "verification_checked_at",
+            "provider_alias",
+            "provider_type",
+            "can_edit",
+            "can_manage_exceptions",
+        ]
+        read_only_fields = fields
 
 
 class TriageWriteSerializer(serializers.Serializer):
@@ -78,6 +120,23 @@ class TriageNoteSerializer(RLSSerializer):
         read_only_fields = ["id", "inserted_at", "updated_at"]
 
 
+class RemovalConfirmationSerializer(serializers.Serializer):
+    previous_status = serializers.ChoiceField(choices=FindingTriage.Status.choices)
+    observation_scan_id = serializers.UUIDField()
+    finding_id = serializers.UUIDField()
+    evidence = serializers.CharField(min_length=3, max_length=500, allow_blank=False)
+    confirm_removed = serializers.BooleanField()
+
+    class JSONAPIMeta:
+        resource_name = "finding-triages"
+
+    def validate(self, attrs):
+        unknown = set(self.initial_data) - set(self.fields) - {"id", "type"}
+        if unknown:
+            raise ValidationError(dict.fromkeys(sorted(unknown), "Unknown field."))
+        return attrs
+
+
 class TriageEventSerializer(RLSSerializer):
     class JSONAPIMeta:
         resource_name = "finding-triage-events"
@@ -87,7 +146,13 @@ class TriageEventSerializer(RLSSerializer):
     def get_actor_name(self, obj) -> str:
         if obj.actor:
             return obj.actor.name or obj.actor.email
-        return "Scan" if obj.kind == "scan" else "Deleted user"
+        return (
+            "Scan"
+            if obj.kind == "scan"
+            else "Resource verification"
+            if obj.kind == "verification"
+            else "Deleted user"
+        )
 
     class Meta:
         model = FindingTriageEvent
@@ -124,11 +189,50 @@ class FindingTriageViewSet(BaseRLSViewSet):
         return queryset.order_by("id")
 
     def get_serializer_class(self):
+        if self.action == "tracked":
+            return TrackedTriageSerializer
         if self.action in {"notes", "update_note", "delete_note"}:
             return TriageNoteSerializer
         if self.action == "history":
             return TriageEventSerializer
         return self.serializer_class
+
+    @extend_schema(responses=TrackedTriageSerializer(many=True))
+    @action(detail=False, methods=["get"])
+    def tracked(self, request, *args, **kwargs):
+        queryset = (
+            tracked_triages(self.get_queryset())
+            .select_related("provider")
+            .annotate(notes_count=Count("note"))
+        )
+        status_filter = request.query_params.get("filter[status]")
+        if status_filter:
+            if status_filter not in FindingTriage.Status.values:
+                raise ValidationError("Invalid triage status.")
+            queryset = queryset.filter(status=status_filter)
+        provider_id = request.query_params.get("filter[provider_id]")
+        if provider_id:
+            from uuid import UUID
+
+            try:
+                provider_id = UUID(provider_id)
+            except ValueError:
+                raise ValidationError("Invalid provider ID.")
+            queryset = queryset.filter(provider_id=provider_id)
+        search = request.query_params.get("filter[search]", "").strip()
+        if len(search) > 200:
+            raise ValidationError("Search cannot exceed 200 characters.")
+        if search:
+            queryset = queryset.filter(
+                Q(finding_uid__icontains=search)
+                | Q(snapshot__title__icontains=search)
+                | Q(snapshot__resources__icontains=search)
+            )
+        queryset = queryset.order_by("-updated_at", "-id")
+        page = self.paginate_queryset(queryset)
+        if page is None:
+            return Response(self.get_serializer(queryset, many=True).data)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
     def _target(self):
         if "finding_uid" in self.kwargs:
@@ -149,14 +253,27 @@ class FindingTriageViewSet(BaseRLSViewSet):
             )
         return finding, triage
 
+    @extend_schema(
+        request=RemovalConfirmationSerializer, responses={200: TriageSerializer}
+    )
+    @action(detail=True, methods=["patch"], url_path="confirm-removal")
+    def confirm_removal(self, request, *args, **kwargs):
+        triage = self.get_object()
+        payload = RemovalConfirmationSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        triage = confirm_resource_removal(request, triage, payload.validated_data)
+        return Response(
+            TriageSerializer(triage, context=self.get_serializer_context()).data
+        )
+
     @extend_schema(request=TriageWriteSerializer, responses={200: TriageSerializer})
     def partial_update(self, request, *args, **kwargs):
-        finding, _ = self._target()
-        if finding is None:
-            raise NotFound("No finding snapshot is available for this triage.")
+        finding, existing = self._target()
         payload = TriageWriteSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        triage = update_triage(request, finding, payload.validated_data)
+        triage = update_triage(
+            request, finding, payload.validated_data, triage=existing
+        )
         return Response(self.get_serializer(triage).data)
 
     @extend_schema(responses=TriageNoteSerializer(many=True))
@@ -172,7 +289,7 @@ class FindingTriageViewSet(BaseRLSViewSet):
     @extend_schema(request=TriageNoteSerializer, responses=TriageNoteSerializer)
     def update_note(self, request, *args, **kwargs):
         finding, triage = self._target()
-        if finding is None or triage is None:
+        if triage is None:
             raise NotFound("Triage note not found.")
         note = get_object_or_404(
             FindingTriageNote,
@@ -187,6 +304,7 @@ class FindingTriageViewSet(BaseRLSViewSet):
             finding,
             {"note": payload.validated_data["body"]},
             note_id=note.id,
+            triage=triage,
         )
         note.refresh_from_db()
         return Response(self.get_serializer(note).data)
@@ -194,9 +312,11 @@ class FindingTriageViewSet(BaseRLSViewSet):
     @extend_schema(responses={204: None})
     def delete_note(self, request, *args, **kwargs):
         finding, triage = self._target()
-        if finding is None or triage is None:
+        if triage is None:
             raise NotFound("Triage note not found.")
-        update_triage(request, finding, {"note": ""}, note_id=kwargs["note_id"])
+        update_triage(
+            request, finding, {"note": ""}, note_id=kwargs["note_id"], triage=triage
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(responses=TriageEventSerializer(many=True))

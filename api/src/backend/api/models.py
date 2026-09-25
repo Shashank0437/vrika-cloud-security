@@ -2633,6 +2633,12 @@ class FindingTriage(RowLevelSecurityProtectedModel):
     last_result = models.CharField(max_length=4, blank=True)
     last_scan_id = models.UUIDField(null=True, blank=True)
     last_scan_started_at = models.DateTimeField(null=True, blank=True)
+    snapshot = models.JSONField(default=dict, blank=True)
+    resolution_reason = models.CharField(max_length=32, blank=True)
+    observation = models.CharField(max_length=32, default="observed")
+    observation_detail = models.CharField(max_length=500, blank=True)
+    observation_scan_id = models.UUIDField(null=True, blank=True)
+    verification_checked_at = models.DateTimeField(null=True, blank=True)
     inserted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

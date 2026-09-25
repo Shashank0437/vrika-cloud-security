@@ -1,9 +1,11 @@
 import {
+  confirmFindingRemoval as confirmRemovalAction,
   loadFindingTriageHistory as loadHistoryAction,
   loadLatestFindingTriageNote as loadNoteAction,
   updateFindingTriage as updateAction,
 } from "@/actions/findings/findings-triage.server";
 import type {
+  ConfirmFindingRemovalInput,
   FindingTriageSummary,
   TriageActionResult,
   UpdateFindingTriageInput,
@@ -31,4 +33,8 @@ export async function loadFindingTriageHistory(
   page = 1,
 ) {
   return unwrap(await loadHistoryAction(triage, page));
+}
+
+export async function confirmFindingRemoval(input: ConfirmFindingRemovalInput) {
+  unwrap(await confirmRemovalAction(input));
 }

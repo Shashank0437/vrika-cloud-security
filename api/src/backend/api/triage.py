@@ -16,6 +16,7 @@ from api.models import (
     StateChoices,
 )
 from api.rbac.permissions import get_providers, get_role
+from api.triage_tracking import refresh_tracked_context, retain_finding_snapshot
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
@@ -91,8 +92,12 @@ def _advance_result(triage, result, scan):
     old_status = triage.status
     if result == "PASS":
         triage.status = FindingTriage.Status.RESOLVED
-    elif result == "FAIL" and triage.last_result == "PASS":
+        triage.resolution_reason = "check_passed"
+    elif result == "FAIL" and (
+        triage.last_result == "PASS" or triage.resolution_reason == "resource_removed"
+    ):
         triage.status = FindingTriage.Status.REOPENED
+        triage.resolution_reason = ""
     triage.last_result = result
     triage.last_scan_id = scan.id
     triage.last_scan_started_at = scanned_at
@@ -101,6 +106,7 @@ def _advance_result(triage, result, scan):
 
 
 def _apply_result(triage, result, scan):
+    old_reason = triage.resolution_reason
     if result == "FAIL":
         _seed_previous_pass(
             triage, _prior_passes(scan, [triage.finding_uid]).get(triage.finding_uid)
@@ -114,14 +120,24 @@ def _apply_result(triage, result, scan):
             "last_result",
             "last_scan_id",
             "last_scan_started_at",
+            "resolution_reason",
             "updated_at",
         ]
     )
-    if old_status != triage.status:
+    if old_status != triage.status or old_reason != triage.resolution_reason:
         _event(
             triage,
             "scan",
-            {"status": {"from": old_status, "to": triage.status}},
+            {
+                "status": {"from": old_status, "to": triage.status},
+                "resolution_reason": {
+                    "from": old_reason,
+                    "to": triage.resolution_reason,
+                },
+                "reason": "Scan returned PASS."
+                if result == "PASS"
+                else "Scan returned FAIL.",
+            },
             scan_id=scan.id,
         )
     return True
@@ -213,45 +229,55 @@ def _mute(triage, finding, actor, reason):
     return str(rule.id)
 
 
-def update_triage(request, finding, data, note_id=None):
+def update_triage(request, finding, data, note_id=None, triage=None):
     role = get_role(request.user, request.tenant_id)
     if not role.manage_triage:
         raise PermissionDenied("Manage Triage permission is required.")
     tenant = request.tenant_id
-    provider_id = finding.scan.provider_id
+    provider_id = finding.scan.provider_id if finding else triage.provider_id
+    finding_uid = finding.uid if finding else triage.finding_uid
     with rls_transaction(tenant):
         # Serialize status/note writes and scan reconciliation for this provider.
         Provider.objects.select_for_update().get(id=provider_id, tenant_id=tenant)
         latest = (
             Finding.objects.filter(
                 tenant_id=tenant,
-                uid=finding.uid,
+                uid=finding_uid,
                 scan__provider_id=provider_id,
                 scan__state=StateChoices.COMPLETED,
             )
             .annotate(scan_time=Coalesce("scan__started_at", "scan__inserted_at"))
-            .select_related("scan")
+            .select_related("scan__provider")
+            .prefetch_related("resources")
             .order_by("-scan_time", "-scan_id", "-id")
             .first()
         )
-        if latest is None:
+        if latest is None and triage is None:
             raise ValidationError(
                 "Triage requires a completed scan containing this finding."
             )
-        triage, created = FindingTriage.objects.get_or_create(
-            tenant_id=tenant,
-            provider_id=provider_id,
-            finding_uid=finding.uid,
-            defaults={
-                "status": "resolved" if latest.status == "PASS" else "open",
-                "last_result": latest.status,
-                "last_scan_id": latest.scan_id,
-                "last_scan_started_at": latest.scan.started_at
-                or latest.scan.inserted_at,
-            },
-        )
-        if not created:
-            _apply_result(triage, latest.status, latest.scan)
+        if latest is not None:
+            triage, created = FindingTriage.objects.get_or_create(
+                tenant_id=tenant,
+                provider_id=provider_id,
+                finding_uid=finding_uid,
+                defaults={
+                    "status": "resolved" if latest.status == "PASS" else "open",
+                    "resolution_reason": "check_passed"
+                    if latest.status == "PASS"
+                    else "",
+                    "last_result": latest.status,
+                    "last_scan_id": latest.scan_id,
+                    "last_scan_started_at": latest.scan.started_at
+                    or latest.scan.inserted_at,
+                },
+            )
+            if not created:
+                _apply_result(triage, latest.status, latest.scan)
+            triage.snapshot = retain_finding_snapshot(triage, latest)
+            triage.save(update_fields=["snapshot"])
+        else:
+            triage.refresh_from_db()
         previous = data.get("previous_status")
         if previous is not None and previous != triage.status:
             raise ConflictException(
@@ -267,6 +293,10 @@ def update_triage(request, finding, data, note_id=None):
                 )
             changes = {"status": {"from": triage.status, "to": new_status}}
             if new_status in EXCEPTION_STATUSES:
+                if latest is None:
+                    raise ValidationError(
+                        "A retained scan finding is required to create a mute rule."
+                    )
                 if not role.manage_triage_exceptions:
                     raise PermissionDenied(
                         "Manage Triage Exceptions permission is required."
@@ -313,7 +343,119 @@ def update_triage(request, finding, data, note_id=None):
                     actor=request.user,
                 )
                 triage.save(update_fields=["updated_at"])
+        if latest is not None:
+            from api.triage_tracking import latest_completed_scan
+
+            current_scan = latest_completed_scan(tenant, provider_id)
+            if current_scan:
+                refresh_tracked_context(current_scan)
         return triage
+
+
+def resolve_removed_resource(
+    triage, scan, *, checked_at, detail, verification, actor=None
+):
+    """Record a removal decision under the caller's provider lock."""
+    old_status, old_reason = triage.status, triage.resolution_reason
+    triage.status = "resolved"
+    triage.resolution_reason = "resource_removed"
+    triage.observation = (
+        "removal_confirmed" if actor is not None else "resource_removed"
+    )
+    triage.observation_detail = detail
+    triage.verification_checked_at = checked_at
+    triage.last_scan_id = scan.id
+    triage.last_scan_started_at = scan.started_at or scan.inserted_at
+    triage.save(
+        update_fields=[
+            "status",
+            "resolution_reason",
+            "observation",
+            "observation_detail",
+            "verification_checked_at",
+            "last_scan_id",
+            "last_scan_started_at",
+            "updated_at",
+        ]
+    )
+    _event(
+        triage,
+        "verification",
+        {
+            "status": {"from": old_status, "to": "resolved"},
+            "resolution_reason": {"from": old_reason, "to": "resource_removed"},
+            "reason": detail,
+            "verification": {**verification, "checked_at": checked_at.isoformat()},
+        },
+        actor=actor,
+        scan_id=scan.id,
+    )
+    return triage
+
+
+def confirm_resource_removal(request, triage, data):
+    from api.triage_tracking import latest_completed_scan
+
+    role = get_role(request.user, request.tenant_id)
+    if not role.manage_triage or not role.manage_triage_exceptions:
+        raise PermissionDenied(
+            "Manage Triage and Manage Triage Exceptions permissions are required to confirm removal."
+        )
+    evidence = data["evidence"].strip()
+    if data["confirm_removed"] is not True or not 3 <= len(evidence) <= 500:
+        raise ValidationError(
+            "Confirm resource removal and provide evidence of 3-500 characters."
+        )
+    with rls_transaction(request.tenant_id):
+        provider = Provider.objects.select_for_update().get(
+            tenant_id=request.tenant_id, id=triage.provider_id
+        )
+        triage.refresh_from_db()
+        scan = latest_completed_scan(request.tenant_id, provider.id)
+        if (
+            scan is None
+            or triage.status == "resolved"
+            or data["previous_status"] != triage.status
+            or data["observation_scan_id"] != scan.id
+            or triage.observation_scan_id != scan.id
+            or str(data["finding_id"]) != triage.snapshot.get("finding_id")
+        ):
+            raise ConflictException(
+                "Triage or scan evidence changed; refresh the finding before confirming removal."
+            )
+        if (
+            scan.trigger not in Scan.LIVE_SCAN_TRIGGERS
+            or any((scan.scanner_args or {}).values())
+            or triage.observation not in {"not_seen", "verification_failed"}
+            or Finding.objects.filter(
+                tenant_id=request.tenant_id, scan_id=scan.id, uid=triage.finding_uid
+            ).exists()
+        ):
+            raise ValidationError(
+                "Removal confirmation requires a finding missing from the latest completed, full-scope scan."
+            )
+        resources = triage.snapshot.get("resources", [])
+        if (
+            triage.snapshot.get("provider_uid") != provider.uid
+            or not resources
+            or not all(resource.get("uid") for resource in resources)
+        ):
+            raise ValidationError(
+                "Retained resource identities in the same provider are required to confirm removal."
+            )
+        return resolve_removed_resource(
+            triage,
+            scan,
+            checked_at=timezone.now(),
+            detail="Resource removal confirmed by an authorized reviewer; not automatically verified by the cloud API.",
+            verification={
+                "method": "reviewer_confirmation",
+                "evidence": evidence,
+                "provider_uid": provider.uid,
+                "resource_uids": [resource["uid"] for resource in resources],
+            },
+            actor=request.user,
+        )
 
 
 def load_triage_summaries(items, context):
@@ -355,6 +497,7 @@ def load_triage_summaries(items, context):
             "can_manage_exceptions": role.manage_triage
             and role.manage_triage_exceptions,
             "finding_uid": finding["uid"],
+            "resolution_reason": triage.resolution_reason if triage else "",
         }
 
 
@@ -410,19 +553,30 @@ def reconcile_scan_triage(tenant_id, scan_id):
                     )
                 if finding["status"] == "FAIL":
                     _seed_previous_pass(triage, previous_passes.get(uid))
+                old_reason = triage.resolution_reason
                 old_status = _advance_result(triage, finding["status"], scan)
                 if old_status is None:
                     continue
                 (create if is_new else update).append(triage)
                 processed += 1
-                if old_status != triage.status:
+                if (
+                    old_status != triage.status
+                    or old_reason != triage.resolution_reason
+                ):
                     events.append(
                         FindingTriageEvent(
                             tenant_id=tenant_id,
                             triage=triage,
                             kind="scan",
                             changes={
-                                "status": {"from": old_status, "to": triage.status}
+                                "status": {"from": old_status, "to": triage.status},
+                                "resolution_reason": {
+                                    "from": old_reason,
+                                    "to": triage.resolution_reason,
+                                },
+                                "reason": "Scan returned PASS."
+                                if finding["status"] == "PASS"
+                                else "Scan returned FAIL.",
                             },
                             scan_id=scan.id,
                         )
@@ -435,9 +589,11 @@ def reconcile_scan_triage(tenant_id, scan_id):
                     "last_result",
                     "last_scan_id",
                     "last_scan_started_at",
+                    "resolution_reason",
                     "updated_at",
                 ],
                 batch_size=500,
             )
             FindingTriageEvent.objects.bulk_create(events, batch_size=500)
+        refresh_tracked_context(scan)
         return {"enabled": True, "processed": processed}
