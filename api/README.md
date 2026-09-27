@@ -2,6 +2,37 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## Vrika scoped roles
+
+Migration `0103_role_vrika_policy` adds per-user Vrika role policies and task
+provider scopes. Deploy it before the corresponding Vrika server release.
+Unmanaged native roles keep their existing behavior. Managed roles are updated
+through `POST /api/v1/internal/vrika-access`, never directly from the browser.
+
+The bridge signs `timestamp + "." + raw_request_body` using HMAC-SHA256 and
+sends `X-Vrika-Timestamp` and `X-Vrika-Signature`. Timestamps expire after 60
+seconds. Configure the shared secret using `VRIKA_INTERNAL_CONFIG_SECRET`,
+`VRIKA_BRIDGE_SECRET`, or `PROWLER_BRIDGE_SECRET` (in that priority order), matching
+the Vrika server bridge secret. Do not expose that secret to the embedded UI.
+
+Global Viewer is read-only; a Cloud Security module Analyst can view, execute
+and edit cloud resources; project Leads are restricted to assigned providers;
+global Admin has full organization access. A Web-only Analyst has no Cloud
+access. Binding unions are evaluated separately for each action, including
+requests made with previously issued tokens. Older or conflicting revisions
+cannot restore revoked permissions.
+
+Project provider groups are named `vrika-project:<project_id>`. Providers can
+belong to only one Vrika project; native unrelated groups are preserved.
+Project-selected tokens cannot broaden their scope, even for an Admin. New
+providers created in a selected project join its group automatically. Scan
+tasks and generated asynchronous tasks inherit provider visibility. Shared
+organization configuration requires module-wide access, not a project binding.
+
+After both services are deployed, run the Vrika server's
+`scripts/migrate_scoped_access.py --apply` to synchronize already linked users.
+Keep this additive migration during a binary rollback.
+
 ## Vrika findings triage
 
 Triage is an organization-private workflow attached to **tenant + provider +

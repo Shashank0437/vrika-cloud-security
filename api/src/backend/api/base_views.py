@@ -62,6 +62,48 @@ class BaseViewSet(ModelViewSet):
 
 
 class BaseRLSViewSet(BaseViewSet):
+    def finalize_response(self, request, response, *args, **kwargs):
+        from api.models import Task
+
+        role = getattr(request.user, "_vrika_request_role", None)
+        location = response.get("Content-Location", "")
+        if (
+            role is not None
+            and role.vrika_policy is not None
+            and not role.unlimited_visibility
+            and response.status_code == 202
+            and "/tasks/" in location
+        ):
+            from uuid import UUID
+
+            task_id = UUID(location.rstrip("/").rsplit("/", 1)[-1])
+            Task.objects.filter(pk=task_id, tenant_id=request.tenant_id).update(
+                vrika_provider_ids=[str(pid) for pid in role._vrika_provider_ids],
+            )
+        return super().finalize_response(request, response, *args, **kwargs)
+
+    def filter_queryset(self, queryset):
+        from api.rbac.vrika import filter_scoped_queryset
+
+        return filter_scoped_queryset(self.request, super().filter_queryset(queryset))
+
+    def perform_create(self, serializer):
+        from api.models import Provider, ProviderGroup, ProviderGroupMembership
+
+        instance = serializer.save()
+        role = getattr(self.request.user, "_vrika_request_role", None)
+        project_id = getattr(role, "_vrika_project_id", None)
+        if isinstance(instance, Provider) and project_id:
+            group = ProviderGroup.objects.get(
+                tenant_id=self.request.tenant_id,
+                name=f"vrika-project:{project_id}",
+            )
+            ProviderGroupMembership.objects.create(
+                tenant_id=self.request.tenant_id,
+                provider_group=group,
+                provider=instance,
+            )
+
     def dispatch(self, request, *args, **kwargs):
         self.db_alias = self._get_request_db_alias(request)
         alias_token = None

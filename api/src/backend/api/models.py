@@ -585,6 +585,7 @@ class ProviderGroupMembership(RowLevelSecurityProtectedModel):
 
 class Task(RowLevelSecurityProtectedModel):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    vrika_provider_ids = models.JSONField(default=list, db_default=[], editable=False)
     inserted_at = models.DateTimeField(auto_now_add=True, editable=False)
     task_runner_task = models.OneToOneField(
         TaskResult,
@@ -1411,6 +1412,7 @@ class Role(RowLevelSecurityProtectedModel):
     manage_triage = models.BooleanField(default=False)
     manage_triage_exceptions = models.BooleanField(default=False)
     unlimited_visibility = models.BooleanField(default=False)
+    vrika_policy = models.JSONField(null=True, blank=True, default=None, editable=False)
     inserted_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
     provider_groups = models.ManyToManyField(

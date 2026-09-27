@@ -1,5 +1,6 @@
 from allauth.socialaccount.providers.saml.views import ACSView, MetadataView, SLSView
 from api.v1.triage import FindingTriageViewSet
+from api.v1.vrika_access import VrikaAccessSyncView
 from api.v1.views import (
     AttackPathsScanViewSet,
     ComplianceFrameworkViewSet,
@@ -132,6 +133,7 @@ integrations_router.register(
 )
 
 urlpatterns = [
+    path("internal/vrika-access", VrikaAccessSyncView.as_view(), name="vrika-access-sync"),
     path(
         "finding-triages/<uuid:pk>/notes/<uuid:note_id>",
         FindingTriageViewSet.as_view({"patch": "update_note", "delete": "delete_note"}),
