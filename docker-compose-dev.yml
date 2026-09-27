@@ -8,6 +8,10 @@ services:
 
   api-dev:
     hostname: "prowler-api"
+    networks:
+      default:
+        aliases:
+          - prowler-api
     image: prowler-api-dev
     build:
       context: ./api

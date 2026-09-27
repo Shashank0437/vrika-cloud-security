@@ -14,6 +14,10 @@ services:
 
   api:
     hostname: "prowler-api"
+    networks:
+      default:
+        aliases:
+          - prowler-api
     image: prowlercloud/prowler-api:${PROWLER_API_VERSION:-stable}
     env_file:
       - path: .env

@@ -16,7 +16,7 @@ from api.models import (
     UserRoleRelationship,
 )
 from django.contrib.auth.hashers import make_password
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
@@ -41,6 +41,29 @@ def verify_bridge(request):
     ).hexdigest()
     if not fresh or not hmac.compare_digest(expected, signature):
         raise AuthenticationFailed("Invalid Vrika bridge signature.")
+
+
+def resolve_provider_projects(payload):
+    """Read the authoritative project groups without changing users or permissions."""
+    try:
+        attrs = payload["data"]["attributes"]
+        tenant_id = str(UUID(attrs["tenant_id"]))
+        provider_id = str(UUID(attrs["provider_id"]))
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ValidationError("Invalid provider project lookup payload.") from exc
+    with rls_transaction(tenant_id):
+        if not Provider.objects.filter(tenant_id=tenant_id, id=provider_id).exists():
+            raise NotFound("Provider not found in the requested tenant.")
+        names = ProviderGroup.objects.filter(
+            tenant_id=tenant_id,
+            providers__id=provider_id,
+            name__startswith="vrika-project:",
+        ).order_by("name").values_list("name", flat=True)[:2]
+        return {
+            "tenant_id": tenant_id,
+            "provider_id": provider_id,
+            "project_ids": [name.removeprefix("vrika-project:") for name in names],
+        }
 
 
 def sync_access(payload):

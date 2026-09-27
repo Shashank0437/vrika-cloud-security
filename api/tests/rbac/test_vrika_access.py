@@ -9,6 +9,8 @@ import pytest
 from api.models import (
     Membership,
     Provider,
+    ProviderGroup,
+    ProviderGroupMembership,
     Role,
     Scan,
     Task,
@@ -16,17 +18,67 @@ from api.models import (
     UserRoleRelationship,
 )
 from api.rbac.vrika import permits, prepare_role
-from api.rbac.vrika_sync import sync_access, verify_bridge
+from api.rbac.vrika_sync import resolve_provider_projects, sync_access, verify_bridge
 from api.rls import Tenant
 from django.test import RequestFactory
 from rest_framework.exceptions import (
     AuthenticationFailed,
     PermissionDenied,
+    NotFound,
     ValidationError,
 )
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db
+
+
+def test_authoritative_provider_project_lookup_is_tenant_scoped(cloud):
+    tenant, _, provider, other = cloud
+    data = {"data": {"attributes": {
+        "tenant_id": str(tenant.pk), "provider_id": str(provider.pk),
+    }}}
+    assert resolve_provider_projects(data)["project_ids"] == []
+    group = ProviderGroup.objects.create(tenant=tenant, name="vrika-project:p1")
+    ProviderGroupMembership.objects.create(tenant=tenant, provider=provider, provider_group=group)
+    assert resolve_provider_projects(data)["project_ids"] == ["p1"]
+    data["data"]["attributes"]["provider_id"] = str(other.pk)
+    assert resolve_provider_projects(data)["project_ids"] == []
+    data["data"]["attributes"]["tenant_id"] = str(uuid4())
+    with pytest.raises(NotFound):
+        resolve_provider_projects(data)
+
+
+def test_ambiguous_project_groups_are_not_silently_selected(cloud):
+    tenant, _, provider, _ = cloud
+    for name in ("vrika-project:p1", "vrika-project:p2", "unrelated-group"):
+        group = ProviderGroup.objects.create(tenant=tenant, name=name)
+        ProviderGroupMembership.objects.create(tenant=tenant, provider=provider, provider_group=group)
+    result = resolve_provider_projects({"data": {"attributes": {
+        "tenant_id": str(tenant.pk), "provider_id": str(provider.pk),
+    }}})
+    assert result["project_ids"] == ["p1", "p2"]
+
+
+def test_project_lookup_endpoint_requires_signed_request(cloud, monkeypatch):
+    tenant, _, provider, _ = cloud
+    monkeypatch.setenv("VRIKA_INTERNAL_CONFIG_SECRET", "test-only")
+    client = APIClient()
+    body = json.dumps({"data": {"type": "vrika-provider-projects", "attributes": {
+        "tenant_id": str(tenant.pk), "provider_id": str(provider.pk),
+    }}})
+    url = "/api/v1/internal/vrika-provider-projects"
+    assert client.post(url, data=body, content_type="application/vnd.api+json").status_code in (401, 403)
+    timestamp = str(int(time.time()))
+    signature = hmac.new(
+        b"test-only", timestamp.encode() + b"." + body.encode(), hashlib.sha256,
+    ).hexdigest()
+    response = client.post(
+        url, data=body, content_type="application/vnd.api+json",
+        HTTP_X_VRIKA_TIMESTAMP=timestamp, HTTP_X_VRIKA_SIGNATURE=signature,
+    )
+    assert response.status_code == 200, response.data
+    assert response.data["data"]["attributes"]["provider_id"] == str(provider.pk)
+    assert not Role.objects.filter(tenant=tenant).exists()
 
 
 def binding(role, scope_type, scope_id=None):
