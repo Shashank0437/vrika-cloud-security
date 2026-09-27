@@ -63,7 +63,7 @@ def build_framework_card(
     width: float = 5.2 * inch,
 ) -> Table:
     """Render one compliance framework summary card."""
-    title = escape_html(truncate_text(card.name, 70))
+    title = escape_html(card.name)
     if card.total:
         score_line = (
             f"{card.score:.1f}% compliant "

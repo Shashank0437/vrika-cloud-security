@@ -13,6 +13,16 @@ from reportlab.lib import colors
 
 logger = logging.getLogger(__name__)
 
+SCAN_REPORT_REVISION = "v2"
+
+
+def scan_report_suffix(variant: str) -> str:
+    """Version cached scan PDFs so old framework labels are regenerated lazily."""
+    if variant not in {"executive", "full"}:
+        raise ValueError(f"Unsupported Vrika scan PDF variant: {variant}")
+    return f"_{variant}_report_{SCAN_REPORT_REVISION}.pdf"
+
+
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), "../../assets/img")
 _COMPLIANCE_LOGO_DIR = os.path.join(
     os.path.dirname(__file__), "../../assets/compliance"

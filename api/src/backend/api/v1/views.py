@@ -2738,15 +2738,18 @@ class ScanViewSet(BaseRLSViewSet):
 
     def _serve_vrika_scan_pdf(self, scan, variant: str):
         """Load and serve a Vrika scan PDF (`executive` or `full`)."""
+        from tasks.jobs.reports.vrika_branding import (
+            SCAN_REPORT_REVISION,
+            scan_report_suffix,
+        )
+
         if not scan.output_location:
             return Response(
                 {"detail": "The scan has no reports yet."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        pattern_suffix = (
-            "*_executive_report.pdf" if variant == "executive" else "*_full_report.pdf"
-        )
+        pattern_suffix = "*" + scan_report_suffix(variant)
 
         if scan.output_location.startswith("s3://"):
             bucket = env.str("DJANGO_OUTPUT_S3_AWS_OUTPUT_BUCKET", "")
@@ -2772,7 +2775,7 @@ class ScanViewSet(BaseRLSViewSet):
             if loader.status_code == status.HTTP_404_NOT_FOUND:
                 from django.core.cache import cache
 
-                lock_key = f"vrika-{variant}-pdf:{scan.id}"
+                lock_key = f"vrika-{variant}-pdf:{scan.id}:{SCAN_REPORT_REVISION}"
                 if not cache.get(lock_key):
                     cache.set(lock_key, True, timeout=3600)
                     tenant_id = str(scan.tenant_id)

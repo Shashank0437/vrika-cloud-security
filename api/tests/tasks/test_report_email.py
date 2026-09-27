@@ -5,6 +5,7 @@ import inspect
 import json
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -123,8 +124,8 @@ def report_paths(tmp_path):
     prefix = str(tmp_path / "scan")
     with patch.object(report, "_vrika_report_path_prefix", return_value=prefix):
         yield (
-            Path(f"{prefix}_executive_report.pdf"),
-            Path(f"{prefix}_full_report.pdf"),
+            Path(f"{prefix}_executive_report_v2.pdf"),
+            Path(f"{prefix}_full_report_v2.pdf"),
         )
 
 
@@ -182,7 +183,11 @@ def test_successful_generation_precedes_email(database, report_paths, provider):
         assert report.share_vrika_scan_email_job(TENANT, SCAN, PROVIDER) == {
             "status": "accepted"
         }
-    assert events == ["scan_executive_report.pdf", "scan_full_report.pdf", "email"]
+    assert events == [
+        "scan_executive_report_v2.pdf",
+        "scan_full_report_v2.pdf",
+        "email",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -264,11 +269,13 @@ def test_notification_requires_server_acceptance(database, report_paths, server_
 def test_notification_error_is_not_reported_as_sent(database, report_paths):
     for path in report_paths:
         path.write_bytes(PDF)
-    with patch.object(
-        report, "_notify_vrika_scan_completed", side_effect=OSError("network down")
+    with (
+        patch.object(
+            report, "_notify_vrika_scan_completed", side_effect=OSError("network down")
+        ),
+        pytest.raises(OSError, match="network down"),
     ):
-        with pytest.raises(OSError, match="network down"):
-            report.share_vrika_scan_email_job(TENANT, SCAN, PROVIDER)
+        report.share_vrika_scan_email_job(TENANT, SCAN, PROVIDER)
 
 
 def test_existing_reports_are_reused(database, report_paths):
@@ -286,6 +293,109 @@ def test_existing_reports_are_reused(database, report_paths):
     executive.assert_not_called()
     full.assert_not_called()
     notify.assert_called_once()
+
+
+def test_old_label_reports_are_regenerated_before_sharing(database, report_paths):
+    for path in report_paths:
+        Path(str(path).replace("_v2.pdf", ".pdf")).write_bytes(PDF)
+
+    def generate(**kwargs):
+        Path(kwargs["output_path"]).write_bytes(PDF)
+
+    with (
+        patch(
+            "tasks.jobs.reports.vrika_scan.generate_vrika_executive_report",
+            side_effect=generate,
+        ) as executive,
+        patch(
+            "tasks.jobs.reports.vrika_scan.generate_vrika_full_report",
+            side_effect=generate,
+        ) as full,
+        patch.object(report, "_notify_vrika_scan_completed") as notify,
+    ):
+        report.share_vrika_scan_email_job(TENANT, SCAN, PROVIDER)
+    executive.assert_called_once()
+    full.assert_called_once()
+    assert notify.call_args.kwargs["executive_pdf_path"].endswith(
+        "_executive_report_v2.pdf"
+    )
+    assert notify.call_args.kwargs["full_pdf_path"].endswith("_full_report_v2.pdf")
+    for path in report_paths:
+        assert path.read_bytes() == PDF
+        assert Path(str(path).replace("_v2.pdf", ".pdf")).exists()
+
+
+@pytest.mark.parametrize("variant", ["executive", "full"])
+@pytest.mark.parametrize("storage", ["local", "s3"])
+def test_pdf_download_uses_current_revision(variant, storage):
+    from api.v1.views import ScanViewSet
+
+    location = (
+        "/reports/scan/output.json"
+        if storage == "local"
+        else "s3://bucket/scan/output.json"
+    )
+    view = ScanViewSet()
+    view._load_file = Mock(return_value=(PDF, "report.pdf"))
+    view._serve_file = Mock(return_value="response")
+    scan = SimpleNamespace(output_location=location)
+    with patch("api.v1.views.env.str", return_value="bucket"):
+        assert view._serve_vrika_scan_pdf(scan, variant) == "response"
+    assert view._load_file.call_args.args[0].endswith(f"*_{variant}_report_v2.pdf")
+
+
+def test_legacy_pdf_lock_does_not_block_current_revision():
+    from api.v1.views import ScanViewSet
+    from rest_framework.response import Response
+
+    view = ScanViewSet()
+    view._load_file = Mock(return_value=Response(status=404))
+    scan = SimpleNamespace(
+        id=SCAN,
+        tenant_id=TENANT,
+        provider_id=PROVIDER,
+        output_location="/reports/scan/output.json",
+    )
+    with (
+        patch("django.core.cache.cache") as cache,
+        patch("api.v1.views.transaction.on_commit", side_effect=lambda fn: fn()),
+        patch("config.celery.celery_app.send_task") as queue,
+    ):
+        cache.get.side_effect = lambda key: key == f"vrika-executive-pdf:{SCAN}"
+        response = view._serve_vrika_scan_pdf(scan, "executive")
+    assert response.status_code == 202
+    cache.set.assert_called_once_with(
+        f"vrika-executive-pdf:{SCAN}:v2", True, timeout=3600
+    )
+    queue.assert_called_once()
+
+
+@pytest.mark.parametrize("variant", ["executive", "full"])
+@pytest.mark.parametrize("fails", [False, True])
+def test_generation_writes_revisioned_pdf_and_releases_matching_lock(
+    database, report_paths, variant, fails
+):
+    expected = report_paths[0 if variant == "executive" else 1]
+    with (
+        patch(
+            f"tasks.jobs.reports.vrika_scan.generate_vrika_{variant}_report",
+            side_effect=RuntimeError("render failed") if fails else None,
+        ) as generate,
+        patch.object(report, "_upload_to_s3", return_value=None) as upload,
+        patch("django.core.cache.cache") as cache,
+    ):
+        if fails:
+            with pytest.raises(RuntimeError, match="render failed"):
+                report.generate_vrika_scan_pdf_job(TENANT, SCAN, PROVIDER, variant)
+            upload.assert_not_called()
+        else:
+            result = report.generate_vrika_scan_pdf_job(TENANT, SCAN, PROVIDER, variant)
+            assert result == {"upload": False, "path": str(expected)}
+            upload.assert_called_once_with(
+                TENANT, SCAN, str(expected), f"vrika/{expected.name}"
+            )
+    assert generate.call_args.kwargs["output_path"] == str(expected)
+    cache.delete.assert_called_once_with(f"vrika-{variant}-pdf:{SCAN}:v2")
 
 
 def test_summary_lookup_error_blocks_notification(database, report_paths):

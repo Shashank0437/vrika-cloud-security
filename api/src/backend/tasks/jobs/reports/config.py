@@ -404,7 +404,7 @@ def get_framework_config(compliance_id: str) -> FrameworkConfig | None:
         return FRAMEWORK_REGISTRY["nis2"]
     if "csa" in compliance_lower or "ccm" in compliance_lower:
         return FRAMEWORK_REGISTRY["csa_ccm"]
-    if compliance_lower.startswith("cis_") or "cis" in compliance_lower:
+    if compliance_lower == "cis" or compliance_lower.startswith(("cis_", "cis-")):
         return FRAMEWORK_REGISTRY["cis"]
 
     return None

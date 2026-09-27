@@ -143,14 +143,35 @@ def _services_from_check_ids(check_ids: set[str] | list[str]) -> str:
 
 
 def _short_framework_name(compliance_id: str, compliance_obj: Any) -> str:
+    framework = (
+        getattr(compliance_obj, "Framework", None)
+        or getattr(compliance_obj, "Name", None)
+        or compliance_id
+    )
     config = get_framework_config(compliance_id)
-    if config:
-        return get_branded_display_name(config.display_name)
-    for attr in ("Name", "Framework"):
-        value = getattr(compliance_obj, attr, None)
-        if value:
-            return truncate_text(str(value).replace("-", " "), 55)
-    return truncate_text(compliance_id.replace("_", " ").title(), 55)
+    if config and config.name == "prowler_threatscore":
+        framework = config.display_name
+    name = get_branded_display_name(
+        str(framework).replace("-", " ").replace("_", " ").strip()
+    )
+    provider = str(getattr(compliance_obj, "Provider", "") or "").strip()
+    provider = {
+        "aws": "AWS",
+        "azure": "Azure",
+        "gcp": "GCP",
+        "github": "GitHub",
+        "m365": "Microsoft 365",
+        "googleworkspace": "Google Workspace",
+        "oraclecloud": "Oracle Cloud",
+        "alibabacloud": "Alibaba Cloud",
+    }.get(provider.lower(), provider)
+    version = str(getattr(compliance_obj, "Version", "") or "").strip()
+    parts = [name]
+    if provider and provider.casefold() not in name.casefold().split():
+        parts.append(provider)
+    if version:
+        parts.append(f"v{version}" if version[0].isdigit() else version)
+    return " ".join(parts)
 
 
 def _aggregate_scan_stats(tenant_id: str, scan_id: str) -> dict[str, int]:

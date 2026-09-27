@@ -246,6 +246,15 @@ cd src/backend
 python -m celery -A config.celery worker -l info -E
 ```
 
+Vrika executive and full scan PDFs retain each compliance framework's identity,
+provider, and version (when supplied by the compliance definition). Card titles
+wrap instead of truncating revision information; compliance scores are unchanged.
+The API and report workers must use the same `SCAN_REPORT_REVISION` from
+`tasks/jobs/reports/vrika_branding.py`. Revisioned filenames and generation locks
+allow downloads and email shares to regenerate older cached PDFs on demand,
+without deleting historical files or rerunning scans. Already downloaded PDFs and
+previously sent email attachments cannot be updated.
+
 #### Commands to run the API Scheduler
 
 ``` console

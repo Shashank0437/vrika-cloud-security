@@ -1299,7 +1299,9 @@ def generate_compliance_reports(
             )
             if out_dir is None:
                 out_dir = str(Path(vrika_dir).parent.parent)
-            executive_pdf = f"{vrika_dir}_executive_report.pdf"
+            from tasks.jobs.reports.vrika_branding import scan_report_suffix
+
+            executive_pdf = vrika_dir + scan_report_suffix("executive")
             generate_vrika_executive_report(
                 tenant_id=tenant_id,
                 scan_id=scan_id,
@@ -1441,6 +1443,10 @@ def generate_vrika_scan_pdf_job(
 ) -> dict[str, bool | str]:
     """Generate and upload an on-demand Vrika scan PDF (executive or full)."""
     from django.core.cache import cache
+    from tasks.jobs.reports.vrika_branding import (
+        SCAN_REPORT_REVISION,
+        scan_report_suffix,
+    )
     from tasks.jobs.reports.vrika_scan import (
         generate_vrika_executive_report,
         generate_vrika_full_report,
@@ -1449,15 +1455,14 @@ def generate_vrika_scan_pdf_job(
     if variant not in {"executive", "full"}:
         raise ValueError(f"Unsupported Vrika scan PDF variant: {variant}")
 
-    lock_key = f"vrika-{variant}-pdf:{scan_id}"
+    lock_key = f"vrika-{variant}-pdf:{scan_id}:{SCAN_REPORT_REVISION}"
     try:
         with rls_transaction(tenant_id, using=READ_REPLICA_ALIAS):
             provider_obj = Provider.objects.get(id=provider_id)
             provider_uid = provider_obj.uid
 
         vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid)
-        suffix = "executive" if variant == "executive" else "full"
-        pdf_path = f"{vrika_dir}_{suffix}_report.pdf"
+        pdf_path = vrika_dir + scan_report_suffix(variant)
         generator = (
             generate_vrika_executive_report
             if variant == "executive"
@@ -1628,6 +1633,7 @@ def share_vrika_scan_email_job(
     """On-demand task to generate PDFs (if not already cached) and dispatch share email."""
     import os
 
+    from tasks.jobs.reports.vrika_branding import scan_report_suffix
     from tasks.jobs.reports.vrika_scan import (
         generate_vrika_executive_report,
         generate_vrika_full_report,
@@ -1644,8 +1650,8 @@ def share_vrika_scan_email_job(
             provider_type = provider_obj.provider
 
     vrika_dir = _vrika_report_path_prefix(tenant_id, scan_id, provider_uid)
-    exec_path = f"{vrika_dir}_executive_report.pdf"
-    full_path = f"{vrika_dir}_full_report.pdf"
+    exec_path = vrika_dir + scan_report_suffix("executive")
+    full_path = vrika_dir + scan_report_suffix("full")
 
     if not os.path.exists(exec_path):
         generate_vrika_executive_report(
