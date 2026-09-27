@@ -1560,6 +1560,7 @@ def _notify_vrika_scan_completed(
     payload = {
         "prowler_tenant_id": str(tenant_id),
         "scan_id": str(scan_id),
+        "provider_id": str(provider_id),
         "provider": str(provider_type or "aws"),
         "account_id": str(provider_uid or ""),
         "compliance_score": score,

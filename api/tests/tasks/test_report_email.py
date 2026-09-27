@@ -58,6 +58,7 @@ def test_scheduled_email_is_chained_after_reports_not_dispatched_independently(
     with (
         patch.object(_chain, "apply_async", autospec=True) as dispatch,
         patch.object(tasks, "can_provider_run_attack_paths_scan", return_value=False),
+        patch.object(tasks.aggregate_attack_surface_task, "apply_async"),
         patch.object(tasks.share_vrika_scan_email_task, "apply_async") as standalone,
     ):
         tasks._perform_scan_complete_tasks(TENANT, SCAN, PROVIDER)
@@ -242,6 +243,9 @@ def test_notification_requires_server_acceptance(database, report_paths, server_
                 str(report_paths[1]),
             )
             payload = json.loads(send.call_args.args[0].data)
+            assert payload["provider_id"] == PROVIDER
+            assert payload["prowler_tenant_id"] == TENANT
+            assert payload["scan_id"] == SCAN
             assert base64.b64decode(payload["executive_pdf_base64"]) == PDF
             assert base64.b64decode(payload["full_pdf_base64"]) == PDF
         else:
