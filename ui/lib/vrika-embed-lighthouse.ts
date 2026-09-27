@@ -1,3 +1,10 @@
+import "server-only";
+
+import { jwtDecode } from "jwt-decode";
+import { z } from "zod";
+
+import { auth } from "@/auth.config";
+import { apiBaseUrl } from "@/lib/helper";
 import type { LighthouseProvider } from "@/types/lighthouse-v1";
 
 /** Map platform LLM provider names (e.g. openrouter) to Prowler Lighthouse types. */
@@ -24,50 +31,6 @@ export function normalizeLighthouseProvider(
     return "openai_compatible";
   }
   return "openai";
-}
-
-export function readEmbedLighthouseEnv() {
-  const apiKey =
-    process.env.VRIKA_LLM_API_KEY?.trim() ||
-    process.env.VRIKA_LIGHTHOUSE_OPENAI_API_KEY?.trim() ||
-    process.env.OPENAI_API_KEY?.trim() ||
-    "";
-
-  const baseUrl =
-    process.env.VRIKA_LLM_URL?.trim() ||
-    process.env.VRIKA_LIGHTHOUSE_BASE_URL?.trim() ||
-    undefined;
-
-  const usingOpenRouter =
-    apiKey.startsWith("sk-or-") || baseUrl?.includes("openrouter.ai") === true;
-
-  const explicitProvider =
-    process.env.VRIKA_LIGHTHOUSE_PROVIDER?.trim() ||
-    process.env.VRIKA_LLM_PROVIDER?.trim();
-
-  const provider = normalizeLighthouseProvider(
-    explicitProvider,
-    usingOpenRouter,
-    Boolean(baseUrl),
-  );
-
-  const rawModel =
-    process.env.VRIKA_LLM_MODEL?.trim() ||
-    process.env.VRIKA_LIGHTHOUSE_MODEL?.trim() ||
-    "openai/gpt-4.1-mini";
-
-  const model =
-    provider === "openai" && rawModel.startsWith("openai/")
-      ? rawModel.replace(/^openai\//, "")
-      : rawModel;
-
-  const resolvedBaseUrl =
-    baseUrl ||
-    (provider === "openai_compatible" && usingOpenRouter
-      ? "https://openrouter.ai/api/v1"
-      : undefined);
-
-  return { apiKey, model, provider, baseUrl: resolvedBaseUrl };
 }
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -103,39 +66,136 @@ export function resolveOpenRouterLlmRouting(
   return { provider, baseUrl };
 }
 
-/**
- * Dynamically query vrika-server's central settings store for the active organization's LLM credentials.
- */
+export class VrikaAiConfigurationError extends Error {
+  constructor(
+    message: string,
+    readonly status = 503,
+  ) {
+    super(message);
+    this.name = "VrikaAiConfigurationError";
+  }
+}
+
+const managedModelSchema = z.object({
+  llm: z.object({
+    provider: z.enum([
+      "openai",
+      "openrouter",
+      "openai_compatible",
+      "custom",
+      "ollama",
+    ]),
+    model: z.string().trim().min(1),
+    api_key: z.string().trim().default(""),
+    base_url: z.string().trim().default(""),
+  }),
+});
+
+/** Resolve credentials server-side without granting access to tenant settings. */
 export async function fetchVrikaServerLlmConfig(): Promise<{
   apiKey: string;
   model: string;
   provider: LighthouseProvider;
   baseUrl: string | undefined;
-} | null> {
-  const secret = process.env.VRIKA_BRIDGE_SECRET?.trim() || "";
-  const serverUrl = process.env.VRIKA_SERVER_API_URL?.trim() || "http://vrika-server-api:8000";
-
-  if (!secret) return null;
-
+}> {
   try {
-    const res = await fetch(`${serverUrl}/org/settings/llm/internal-resolve?secret=${encodeURIComponent(secret)}`, {
-      headers: { "Content-Type": "application/json" },
+    const session = await auth();
+    if (!session?.accessToken) {
+      throw new VrikaAiConfigurationError(
+        "Sign in to use Cloud Security AI.",
+        401,
+      );
+    }
+    // Validate the token and current project bindings before trusting its tenant.
+    const access = await fetch(`${apiBaseUrl}/users/me`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.configured) return null;
-    const isLocalCustom = data.provider === "custom" || data.provider === "ollama" || Boolean(data.base_url);
-    if (!data.api_key && !isLocalCustom) return null;
+    if (access.status === 401 || access.status === 403) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security access is unavailable for this session. Refresh your session or contact your administrator.",
+        access.status,
+      );
+    }
+    if (!access.ok) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security access could not be verified. Please try again.",
+      );
+    }
+    const claims = jwtDecode<{ tenant_id?: string }>(session.accessToken);
+    if (!claims.tenant_id) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security session has no tenant.",
+        401,
+      );
+    }
 
-    const apiKey = String(data.api_key || (isLocalCustom ? "local" : "")).trim();
-    const baseUrl = data.base_url?.trim() || (data.provider === "openrouter" ? "https://openrouter.ai/api/v1" : undefined);
-    const provider = normalizeLighthouseProvider(data.provider, data.provider === "openrouter", Boolean(baseUrl));
-    const model = data.model || (isLocalCustom ? "local-model" : "openai/gpt-4.1-mini");
+    const secret =
+      process.env.VRIKA_INTERNAL_CONFIG_SECRET?.trim() ||
+      process.env.VRIKA_BRIDGE_SECRET?.trim();
+    if (!secret) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security AI connection is not configured. Contact your administrator.",
+      );
+    }
+    const serverUrl = (
+      process.env.VRIKA_SERVER_API_URL?.trim() || "http://vrika-server-api:8000"
+    ).replace(/\/+$/, "");
+    const res = await fetch(
+      `${serverUrl}/internal/org-config?prowler_tenant_id=${encodeURIComponent(claims.tenant_id)}`,
+      {
+        headers: { "X-Vrika-Internal-Secret": secret },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!res.ok) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security AI configuration could not be loaded. Please try again.",
+      );
+    }
+    const parsed = managedModelSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security AI is not configured for your organization. Contact your administrator.",
+      );
+    }
+    const data = parsed.data.llm;
+    const isLocalCustom =
+      data.provider === "custom" || data.provider === "ollama";
+    if (
+      (!data.api_key && !isLocalCustom) ||
+      (isLocalCustom && !data.base_url)
+    ) {
+      throw new VrikaAiConfigurationError(
+        "Cloud Security AI is not configured for your organization. Contact your administrator.",
+      );
+    }
+    const apiKey = data.api_key || "local";
+    const baseUrl =
+      data.base_url ||
+      (data.provider === "openrouter" ? OPENROUTER_BASE_URL : undefined);
+    const provider = normalizeLighthouseProvider(
+      data.provider,
+      data.provider === "openrouter",
+      Boolean(baseUrl),
+    );
+    const model =
+      provider === "openai" ? data.model.replace(/^openai\//, "") : data.model;
 
     return { apiKey, model, provider, baseUrl };
-  } catch (err) {
-    console.warn("[Vrika embed] Failed to resolve dynamic LLM from vrika-server:", err);
-    return null;
+  } catch (error) {
+    if (error instanceof VrikaAiConfigurationError) {
+      console.error("[Vrika embed]", error.message);
+      throw error;
+    }
+    console.error(
+      "[Vrika embed] Model configuration request failed",
+      error instanceof Error ? error.name : "Unknown error",
+    );
+    throw new VrikaAiConfigurationError(
+      "Cloud Security AI configuration could not be loaded. Please try again.",
+    );
   }
 }

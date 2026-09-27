@@ -4,7 +4,6 @@ import {
   getLighthouseProvidersConfig,
   isLighthouseConfigured,
 } from "@/actions/lighthouse-v1/lighthouse";
-import { ensureVrikaEmbedLighthouseConfig } from "@/actions/lighthouse-v1/vrika-embed-provision";
 import {
   getLighthouseV2Configurations,
   getLighthouseV2Messages,
@@ -20,6 +19,10 @@ import { ContentLayout } from "@/components/shadcn/content-layout";
 import { LIGHTHOUSE_ROUTE } from "@/lib/lighthouse-routes";
 import { isCloud } from "@/lib/shared/env";
 import { getVrikaAiLabel, isVrikaEmbedMode } from "@/lib/vrika-embed";
+import {
+  fetchVrikaServerLlmConfig,
+  VrikaAiConfigurationError,
+} from "@/lib/vrika-embed-lighthouse";
 
 export const dynamic = "force-dynamic";
 
@@ -99,26 +102,34 @@ export default async function AIChatbot({
   }
 
   const embedMode = isVrikaEmbedMode();
-  let hasConfig = await isLighthouseConfigured();
-
-  if (embedMode && !hasConfig) {
-    hasConfig = await ensureVrikaEmbedLighthouseConfig();
+  if (embedMode) {
+    let managed;
+    let unavailableReason: string | undefined;
+    try {
+      managed = await fetchVrikaServerLlmConfig();
+    } catch (error) {
+      if (!(error instanceof VrikaAiConfigurationError)) throw error;
+      unavailableReason = error.message;
+    }
+    return (
+      <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
+        <div className="mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6">
+          <Chat
+            hasConfig={Boolean(managed)}
+            providers={[]}
+            defaultProviderId={managed?.provider}
+            defaultModelId={managed?.model}
+            initialPrompt={initialPrompt}
+            hideModelSelector={true}
+            unavailableReason={unavailableReason}
+          />
+        </div>
+      </ContentLayout>
+    );
   }
+  const hasConfig = await isLighthouseConfigured();
 
   if (!hasConfig) {
-    if (embedMode) {
-      return (
-        <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-          <div className="mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6">
-            <Chat
-              hasConfig={false}
-              providers={[]}
-              hideModelSelector={true}
-            />
-          </div>
-        </ContentLayout>
-      );
-    }
     return redirect(LIGHTHOUSE_ROUTE.SETTINGS);
   }
 
@@ -127,40 +138,18 @@ export default async function AIChatbot({
 
   // Handle errors or missing configuration
   if (providersConfig.errors || !providersConfig.providers) {
-    if (embedMode) {
-      return (
-        <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-          <div className="mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6">
-            <Chat
-              hasConfig={false}
-              providers={[]}
-              hideModelSelector={true}
-            />
-          </div>
-        </ContentLayout>
-      );
-    }
     return redirect(LIGHTHOUSE_ROUTE.SETTINGS);
   }
 
   return (
     <ContentLayout title={getVrikaAiLabel()} icon={<LighthouseIcon />}>
-      {/* In Vrika iframe embed, keep horizontal padding so chat is not flush
-          to the parent shell edges. Standalone Lighthouse still bleeds edge-to-edge. */}
-      <div
-        className={
-          embedMode
-            ? "mx-2 h-[calc(100dvh-4.5rem)] sm:mx-4 md:mx-6"
-            : "-mx-6 -my-4 h-[calc(100dvh-4.5rem)] sm:-mx-8"
-        }
-      >
+      <div className="-mx-6 -my-4 h-[calc(100dvh-4.5rem)] sm:-mx-8">
         <Chat
           hasConfig={hasConfig}
           providers={providersConfig.providers}
           defaultProviderId={providersConfig.defaultProviderId}
           defaultModelId={providersConfig.defaultModelId}
           initialPrompt={initialPrompt}
-          hideModelSelector={embedMode}
         />
       </div>
     </ContentLayout>

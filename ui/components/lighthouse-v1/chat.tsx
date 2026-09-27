@@ -67,6 +67,7 @@ interface ChatProps {
   defaultModelId?: string;
   initialPrompt?: string;
   hideModelSelector?: boolean;
+  unavailableReason?: string;
 }
 
 interface SelectedModel {
@@ -110,6 +111,7 @@ export const Chat = ({
   defaultModelId,
   initialPrompt,
   hideModelSelector = false,
+  unavailableReason,
 }: ChatProps) => {
   const embedMode = isVrikaEmbedMode();
   const modelSelectorHidden = hideModelSelector || embedMode;
@@ -326,7 +328,7 @@ export const Chat = ({
   // Auto-send initial prompt from URL (e.g., finding context from drawer)
   const initialPromptSentRef = useRef(false);
   useMountEffect(() => {
-    if (initialPrompt && !initialPromptSentRef.current) {
+    if (hasConfig && initialPrompt && !initialPromptSentRef.current) {
       initialPromptSentRef.current = true;
       sendMessage({ text: initialPrompt });
     }
@@ -373,18 +375,19 @@ export const Chat = ({
       )}
 
       {!hasConfig && (
-        <div className="bg-bg-neutral-primary/80 absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div className="bg-bg-neutral-primary/80 absolute inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <Card
             variant="base"
             padding="lg"
-            className="max-w-md text-center shadow-lg"
+            className="w-full max-w-md text-center shadow-lg"
           >
             <CardHeader>
               <CardTitle>AI assistant unavailable</CardTitle>
               <CardDescription>
-                {embedMode
-                  ? "Cloud Security AI is managed by your Vrika administrator."
-                  : `Please configure an LLM provider to use ${getVrikaAiLabel()}.`}
+                {unavailableReason ||
+                  (embedMode
+                    ? "Cloud Security AI is managed by your Vrika administrator."
+                    : `Please configure an LLM provider to use ${getVrikaAiLabel()}.`)}
               </CardDescription>
             </CardHeader>
             {!embedMode && (
@@ -467,6 +470,7 @@ export const Chat = ({
                 <Button
                   key={`suggested-action-${index}`}
                   aria-label={`Send message: ${action.action}`}
+                  disabled={!hasConfig}
                   onClick={() => {
                     sendMessage({
                       text: action.action,
@@ -531,12 +535,15 @@ export const Chat = ({
             : "w-full px-4 pb-16 md:max-w-3xl md:pb-16",
         )}
       >
-        {!hasConfig && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs text-foreground backdrop-blur-sm">
+        {!hasConfig && !embedMode && (
+          <div className="text-foreground mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs backdrop-blur-sm">
             <div className="flex items-center gap-2">
-              <span className="text-base text-amber-500 font-bold" aria-hidden>⚠️</span>
+              <span className="text-base font-bold text-amber-500" aria-hidden>
+                ⚠️
+              </span>
               <span>
-                <strong>LLM Not Configured:</strong> Please configure an active AI model in Settings to use Vrika AI.
+                <strong>LLM Not Configured:</strong> Please configure an active
+                AI model in Settings to use Vrika AI.
               </span>
             </div>
             <a
@@ -577,10 +584,11 @@ export const Chat = ({
               disabled={!hasConfig}
               placeholder={
                 !hasConfig
-                  ? "LLM provider is not configured. Go to Settings > LLM Configuration to configure an AI provider."
+                  ? unavailableReason ||
+                    "AI assistant unavailable. Contact your administrator."
                   : error || errorMessage
-                  ? "Edit your message and try again..."
-                  : "Type your message..."
+                    ? "Edit your message and try again..."
+                    : "Type your message..."
               }
               value={uiState.inputValue}
               onChange={(e) =>

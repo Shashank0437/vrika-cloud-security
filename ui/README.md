@@ -137,6 +137,27 @@ pnpm run dev
 
 ## Lighthouse / Vrika AI tool compatibility
 
+### Project-scoped embedded AI
+
+In Vrika embed mode, the chat page and analyst endpoint use the organization's
+managed model directly. Opening chat no longer reads or auto-provisions
+tenant-wide Lighthouse provider/configuration records as the project user.
+No module-level grant is needed, and existing role bindings are not changed.
+
+The server validates the current Cloud token through `/users/me`, extracts that
+validated token's tenant, and resolves its linked organization's model through
+Vrika's `/internal/org-config` bridge. Configure `VRIKA_SERVER_API_URL` and
+`VRIKA_INTERNAL_CONFIG_SECRET` (or `VRIKA_BRIDGE_SECRET`) on the Cloud UI service.
+Credentials remain server-only. Embedded requests cannot override the managed
+provider/model; absent configuration or revoked access produces an explicit
+unavailable state, not a fallback to the first organization or a shared
+environment model. Standalone Lighthouse keeps its own provider settings.
+
+MCP data tools still receive the current user's project-scoped token. This does
+not grant access to other projects, tenant settings, provider credentials, or
+write tools. Project Viewers can ask read-only questions about their permitted
+data; Analysts and Leads retain the same data boundaries.
+
 The AI supports both `prowler_app_*` and `prowler_*` App tool names from MCP
 releases. It presents canonical `prowler_app_*` names to the model, resolves
 them to the server's original wire names, and forwards the current request's

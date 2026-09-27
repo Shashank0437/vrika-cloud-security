@@ -29,7 +29,6 @@ import { getModelParams } from "@/lib/lighthouse-v1/utils";
 import { isVrikaEmbedMode } from "@/lib/vrika-embed";
 import {
   fetchVrikaServerLlmConfig,
-  readEmbedLighthouseEnv,
   resolveOpenRouterLlmRouting,
 } from "@/lib/vrika-embed-lighthouse";
 
@@ -38,17 +37,6 @@ export interface RuntimeConfig {
   provider?: string;
   businessContext?: string;
   currentData?: string;
-}
-
-function hasStoredCredentials(
-  credentials: Awaited<
-    ReturnType<typeof getProviderCredentials>
-  >["credentials"],
-): boolean {
-  if ("access_key_id" in credentials && credentials.access_key_id) {
-    return true;
-  }
-  return "api_key" in credentials && Boolean(credentials.api_key);
 }
 
 function readApiKey(
@@ -128,52 +116,32 @@ export async function initLighthouseWorkflow(runtimeConfig?: RuntimeConfig) {
     systemPrompt += userDataSection;
   }
 
-  const tenantConfigResult = await getTenantConfig();
-  const tenantConfig = tenantConfigResult?.data?.attributes;
-
-  const defaultProvider = tenantConfig?.default_provider || "openai";
-  const defaultModels = tenantConfig?.default_models || {};
-  const defaultModel = defaultModels[defaultProvider] || "gpt-5.2";
-
-  let providerType = (runtimeConfig?.provider?.trim() ||
-    defaultProvider) as ProviderType;
-  let modelId = runtimeConfig?.model?.trim() || defaultModel;
-
-  // Get credentials from tenant provider store; embed mode falls back to platform env.
-  let providerConfig = await getProviderCredentials(providerType);
-  let { credentials, base_url: baseUrl } = providerConfig;
-
-  let embedEnv = null;
+  let providerType: ProviderType;
+  let modelId: string;
+  let credentials: Awaited<
+    ReturnType<typeof getProviderCredentials>
+  >["credentials"];
+  let baseUrl: string | undefined;
   if (isVrikaEmbedMode()) {
-    const dynamicConfig = await fetchVrikaServerLlmConfig();
-    embedEnv = dynamicConfig || readEmbedLighthouseEnv();
-  }
-
-  if (embedEnv && !hasStoredCredentials(credentials)) {
-    if (embedEnv.apiKey) {
-      credentials = { api_key: embedEnv.apiKey };
-      baseUrl = baseUrl || embedEnv.baseUrl;
-      if (!runtimeConfig?.provider?.trim()) {
-        providerType = embedEnv.provider as ProviderType;
-      }
-      if (!runtimeConfig?.model?.trim()) {
-        modelId = embedEnv.model;
-      }
-    }
-  }
-
-  // Stored tenant config may still say "openai" while the key is OpenRouter.
-  if (!hasStoredCredentials(credentials) && embedEnv?.apiKey) {
-    providerConfig = await getProviderCredentials(
-      embedEnv.provider as ProviderType,
-    );
-    if (hasStoredCredentials(providerConfig.credentials)) {
-      credentials = providerConfig.credentials;
-      baseUrl = baseUrl || providerConfig.base_url;
-      if (!runtimeConfig?.provider?.trim()) {
-        providerType = embedEnv.provider as ProviderType;
-      }
-    }
+    const managed = await fetchVrikaServerLlmConfig();
+    providerType = managed.provider;
+    modelId = managed.model;
+    credentials = { api_key: managed.apiKey };
+    baseUrl = managed.baseUrl;
+  } else {
+    const tenantConfigResult = await getTenantConfig();
+    const tenantConfig = tenantConfigResult?.data?.attributes;
+    const defaultProvider = tenantConfig?.default_provider || "openai";
+    const defaultModels = tenantConfig?.default_models || {};
+    providerType = (runtimeConfig?.provider?.trim() ||
+      defaultProvider) as ProviderType;
+    modelId =
+      runtimeConfig?.model?.trim() ||
+      defaultModels[defaultProvider] ||
+      "gpt-5.2";
+    const providerConfig = await getProviderCredentials(providerType);
+    credentials = providerConfig.credentials;
+    baseUrl = providerConfig.base_url;
   }
 
   let effectiveKey = readApiKey(credentials);

@@ -22,6 +22,8 @@ import {
   initLighthouseWorkflow,
   type RuntimeConfig,
 } from "@/lib/lighthouse-v1/workflow";
+import { isVrikaEmbedMode } from "@/lib/vrika-embed";
+import { VrikaAiConfigurationError } from "@/lib/vrika-embed-lighthouse";
 import { SentryErrorSource, SentryErrorType } from "@/sentry";
 
 export async function POST(req: Request) {
@@ -49,7 +51,9 @@ export async function POST(req: Request) {
 
     return await authContextStorage.run(accessToken, async () => {
       // Get AI configuration to access business context
-      const tenantConfigResult = await getTenantConfig();
+      const tenantConfigResult = isVrikaEmbedMode()
+        ? undefined
+        : await getTenantConfig();
       const businessContext =
         tenantConfigResult?.data?.attributes?.business_context;
 
@@ -180,6 +184,9 @@ export async function POST(req: Request) {
       return createUIMessageStreamResponse({ stream });
     });
   } catch (error) {
+    if (error instanceof VrikaAiConfigurationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     console.error("Error in POST request:", error);
 
     // Capture API route errors
