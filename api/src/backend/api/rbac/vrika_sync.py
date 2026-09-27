@@ -91,10 +91,10 @@ def sync_access(payload):
                 b["role"] in {"viewer", "admin"}
                 and b["scope_type"] == "global"
                 and b.get("scope_id") is None
-                or b["role"] == "analyst"
+                or b["role"] in {"viewer", "analyst"}
                 and b["scope_type"] == "module"
                 and b["scope_id"] in {"web_security", "cloud_security"}
-                or b["role"] == "lead"
+                or b["role"] in {"viewer", "analyst", "lead"}
                 and b["scope_type"] == "project"
                 and b["scope_id"] in projects
             )
@@ -153,7 +153,11 @@ def sync_access(payload):
         # Persist native flags for the cloud UI's permission controls. Requests
         # re-evaluate scope and object access independently using vrika_policy.
         admin = permits(bindings, "manage_roles")
-        write = permits(bindings, "edit") or any(b["role"] == "lead" for b in bindings)
+        write = permits(bindings, "edit") or any(
+            b["scope_type"] == "project"
+            and permits(bindings, "edit", project_id=b["scope_id"])
+            for b in bindings
+        )
         for field in role.PERMISSION_FIELDS:
             setattr(
                 role,
@@ -220,7 +224,12 @@ def sync_access(payload):
             if project_id and project_id not in projects:
                 raise ValidationError("Unknown project.")
             if not permits(bindings, "view", project_id=project_id) and (
-                project_id or not any(b["role"] == "lead" for b in bindings)
+                project_id
+                or not any(
+                    b["scope_type"] == "project"
+                    and permits(bindings, "view", project_id=b["scope_id"])
+                    for b in bindings
+                )
             ):
                 raise ValidationError("No Cloud Security access.")
             refresh = RefreshToken.for_user(user)

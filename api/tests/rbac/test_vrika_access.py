@@ -87,6 +87,47 @@ def test_union_is_action_scoped():
     assert not permits(bindings, "manage_roles", project_id="p1")
 
 
+@pytest.mark.parametrize("role", ["viewer", "analyst"])
+def test_explicit_module_binding_does_not_grant_other_module_or_admin(role, cloud):
+    _, user, _, _ = cloud
+    bindings = [binding(role, "module", "cloud_security")]
+    sync_access(payload(cloud, bindings))
+    assert permits(bindings, "view")
+    assert not permits(bindings, "view", module="web_security")
+    assert not permits(bindings, "view", module=None)
+    with pytest.raises(PermissionDenied):
+        prepare_role(
+            request_for(user, "GET", "/api/v1/roles"),
+            SimpleNamespace(queryset=Role.objects.all(), kwargs={}),
+            role_for(cloud),
+        )
+
+
+@pytest.mark.parametrize("role", ["viewer", "analyst"])
+def test_explicit_project_binding_enters_cloud_and_restricts_providers(role, cloud):
+    _, user, provider, other = cloud
+    result = sync_access(payload(
+        cloud, [binding(role, "project", "p1")], issue_tokens=True,
+        provider_assignment={"project_id": "p1", "provider_ids": [str(provider.id)]},
+    ))
+    assert role_for(cloud).manage_scans == (role == "analyst")
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {result['access']}")
+    response = client.get("/api/v1/providers")
+    assert response.status_code == 200, response.content
+    assert [row["id"] for row in response.json()["data"]] == [str(provider.id)]
+    assert client.get(f"/api/v1/providers/{other.id}").status_code == 403
+    assert client.delete(f"/api/v1/providers/{other.id}").status_code == 403
+    assert client.get("/api/v1/roles").status_code == 403
+    write = request_for(user, "PATCH", f"/api/v1/providers/{provider.id}", project_id="p1")
+    view = SimpleNamespace(queryset=Provider.objects.all(), kwargs={"pk": str(provider.id)})
+    if role == "viewer":
+        with pytest.raises(PermissionDenied):
+            prepare_role(write, view, role_for(cloud))
+    else:
+        assert prepare_role(write, view, role_for(cloud)).manage_providers
+
+
 def test_signed_bridge_rejects_missing_stale_and_modified_signatures(monkeypatch):
     monkeypatch.setenv("VRIKA_INTERNAL_CONFIG_SECRET", "test-secret")
     factory = RequestFactory()
