@@ -1,0 +1,1 @@
+Fix scans failing immediately when a universal-only compliance framework such as DPDPA is selected. Resolve these selections with the SDK's check selector while preserving legacy selections and preventing empty mappings from launching unrestricted scans.

@@ -3,7 +3,9 @@ import threading
 from collections.abc import Iterable, Mapping
 
 from api.models import Provider
+from prowler.lib.check.checks_loader import load_checks_to_execute
 from prowler.lib.check.compliance_models import (
+    Compliance,
     get_bulk_compliance_frameworks_universal,
 )
 from prowler.lib.check.models import CheckMetadata
@@ -159,6 +161,49 @@ def get_prowler_provider_compliance(provider_type: Provider.ProviderChoices) -> 
         dict: Mapping of framework name to `ComplianceFramework` for the provider.
     """
     return get_bulk_compliance_frameworks_universal(provider_type)
+
+
+def build_scan_kwargs(
+    provider_type: str,
+    scanner_args: dict | None,
+    checks_to_execute: list[str] | None = None,
+) -> dict:
+    """Resolve universal and legacy selections for the SDK's check-based scan API."""
+    scanner_args = scanner_args or {}
+    compliances = scanner_args.get("compliances")
+    if isinstance(compliances, list) and compliances:
+        frameworks = get_prowler_provider_compliance(provider_type)
+        for compliance_id in compliances:
+            if compliance_id not in frameworks:
+                raise ValueError(f"Unknown compliance framework: {compliance_id}")
+
+    if checks_to_execute:
+        return {"checks": checks_to_execute}
+    if isinstance(scanner_args.get("checks"), list) and scanner_args["checks"]:
+        return {"checks": scanner_args["checks"]}
+    if isinstance(compliances, list) and compliances:
+        legacy_frameworks = Compliance.get_bulk(provider_type)
+        if all(compliance_id in legacy_frameworks for compliance_id in compliances):
+            return {"compliances": compliances}
+        metadata = CheckMetadata.get_bulk(provider_type)
+        mapped_checks = load_checks_to_execute(
+            provider=provider_type,
+            bulk_checks_metadata=metadata,
+            bulk_compliance_frameworks=legacy_frameworks,
+            compliance_frameworks=compliances,
+            universal_frameworks={
+                key: value
+                for key, value in frameworks.items()
+                if key not in legacy_frameworks
+            },
+        )
+        mapped_checks.intersection_update(metadata)
+        if not mapped_checks:
+            raise ValueError(
+                f"Selected compliance frameworks have no automated checks for {provider_type}"
+            )
+        return {"checks": sorted(mapped_checks)}
+    return {}
 
 
 def _load_provider_assets(provider_type: Provider.ProviderChoices) -> tuple[dict, dict]:

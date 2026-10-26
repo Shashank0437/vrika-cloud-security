@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sentry_sdk
-from api.compliance import PROWLER_COMPLIANCE_OVERVIEW_TEMPLATE
+from api.compliance import PROWLER_COMPLIANCE_OVERVIEW_TEMPLATE, build_scan_kwargs
 from api.constants import SEVERITY_ORDER
 from api.db_router import READ_REPLICA_ALIAS, MainRouter
 from api.db_utils import (
@@ -1166,15 +1166,9 @@ def perform_prowler_scan(
         if exc:
             raise exc
 
-        prowler_scan_kwargs: dict = {}
-        scanner_args = scan_instance.scanner_args or {}
-        compliances = scanner_args.get("compliances")
-        if isinstance(compliances, list) and compliances:
-            prowler_scan_kwargs["compliances"] = compliances
-        if checks_to_execute:
-            prowler_scan_kwargs["checks"] = checks_to_execute
-        elif isinstance(scanner_args.get("checks"), list) and scanner_args["checks"]:
-            prowler_scan_kwargs["checks"] = scanner_args["checks"]
+        prowler_scan_kwargs = build_scan_kwargs(
+            provider_instance.provider, scan_instance.scanner_args, checks_to_execute
+        )
 
         prowler_scan = ProwlerScan(provider=prowler_provider, **prowler_scan_kwargs)
 

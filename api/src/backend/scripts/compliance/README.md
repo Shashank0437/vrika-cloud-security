@@ -87,6 +87,13 @@ directory, and verifies discovery for all three providers. The Vrika overlay use
 the same image for API, worker and worker-beat, so no separate UI registration is
 needed. Existing compliance views use the standard framework and requirement data.
 
+The pinned SDK scan constructor validates only legacy framework IDs. The API
+resolves selections containing universal-only frameworks through the SDK's
+universal-aware check selector and passes the resulting checks to the constructor.
+The original framework selection remains on the scan for compliance reporting.
+Legacy-only selections retain their existing path. A selection with no executable
+checks is rejected instead of falling back to an unrestricted scan.
+
 Build and deploy from the repository root on the deployment host:
 
 ```sh
@@ -108,6 +115,14 @@ From the repository root, using the API's Python environment for SDK tests:
 
 ```sh
 api/.venv/bin/python -m unittest discover -s api/src/backend/scripts -p 'test_install_compliance.py' -v
+```
+
+With the API's Django environment configured, also run the scan-selection
+regression tests (no database access or cloud calls):
+
+```sh
+cd api
+uv run pytest tests/tasks/test_scan_compliance_selection.py
 ```
 
 The lightweight guards also run with `python3` without Django or cloud credentials;
