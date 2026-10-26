@@ -1,0 +1,420 @@
+{
+  "framework": "DPDPA-Cloud-Security-Baseline",
+  "name": "DPDPA Cloud Security Baseline",
+  "version": "1.0",
+  "description": "Vrika cloud-security readiness catalog mapped to the Digital Personal Data Protection Act, 2023 and final DPDP Rules, 2025 (G.S.R. 846(E)). Includes configuration evidence and manual cloud-security obligations for AWS, Azure and GCP; not the complete Act or Rules, a legal compliance percentage, or certification. Rule 4 commences one year after Gazette publication; rules 5-16 commence eighteen months after publication. Confirm applicability and commencement before interpreting results. PASS means mapped checks found no failures, not that the entire legal obligation was verified. Manual and conditional requirements remain in the score denominator. Scans do not identify all personal data or evaluate every service.",
+  "attributes_metadata": [
+    {"key": "Section", "label": "Control area", "type": "str", "required": true},
+    {"key": "LegalReference", "label": "Legal reference", "type": "str", "required": true},
+    {"key": "EvidenceLimitations", "label": "Evidence limitations", "type": "str", "required": true},
+    {"key": "SourceClauses", "label": "Source clauses", "type": "list_str", "required": true},
+    {"key": "Coverage", "label": "Legal obligation coverage", "type": "str", "enum": ["Partial", "Manual"], "required": true},
+    {"key": "Applicability", "label": "Applicability", "type": "str", "required": true},
+    {"key": "Commencement", "label": "Commencement", "type": "str", "required": true}
+  ],
+  "outputs": {
+    "table_config": {
+      "group_by": "Section",
+      "labels": {"footer_note": "Cloud-security readiness only. Partial checks are not legal certification; review manual requirements and applicability."}
+    },
+    "pdf_config": {
+      "group_by_field": "Section",
+      "filter": {"only_failed": false, "include_manual": true},
+      "labels": {"report_title": "DPDPA Cloud Security Readiness", "compliance_score_label": "Mapped Cloud-Security Requirement Results"}
+    }
+  },
+  "requirements": [
+    {
+      "id": "VRIKA-DPDPA-CS-01",
+      "name": "Restrict privileged access",
+      "description": "Apply provider-specific controls to reduce unauthorized privileged access to cloud resources.",
+      "attributes": {
+        "Section": "Access control",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(b)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(b)"],
+        "Coverage": "Partial",
+        "Applicability": "Data Fiduciaries and processing performed on their behalf; assessed identities only.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "AWS checks root MFA and selected customer-managed policies, Azure checks privileged-user MFA, and GCP checks service-account administrative privileges. These are different, limited indicators, not exhaustive access reviews or proof of authorized personal-data processing."
+      },
+      "checks": {
+        "aws": ["iam_root_mfa_enabled", "iam_no_root_access_key", "iam_customer_attached_policy_no_administrative_privileges"],
+        "azure": ["entra_privileged_user_has_mfa"],
+        "gcp": ["iam_sa_no_administrative_privileges"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-02",
+      "name": "Restrict public object-storage access",
+      "description": "Prevent anonymous public access to assessed object-storage resources.",
+      "attributes": {
+        "Section": "Data exposure",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(b)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(b)"],
+        "Coverage": "Partial",
+        "Applicability": "Object storage in scan scope; determine which resources process personal data.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Checks storage access configuration, not the presence of personal data, application authorization, signed URLs, every network path, or whether a public asset has an approved business purpose."
+      },
+      "checks": {
+        "aws": ["s3_bucket_public_access"],
+        "azure": ["storage_blob_public_access_level_is_disabled"],
+        "gcp": ["cloudstorage_bucket_public_access"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-03",
+      "name": "Require encrypted transport",
+      "description": "Require encrypted connections to assessed storage or database services.",
+      "attributes": {
+        "Section": "Encryption in transit",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(a)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(a)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed storage and database endpoints; encryption is a selected technical safeguard, not the only method permitted by the rule.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Covers AWS S3 secure-transport policies, Azure Storage secure transfer and minimum TLS version, and GCP Cloud SQL SSL enforcement. It does not assess all traffic, encryption at rest, application endpoints or key management."
+      },
+      "checks": {
+        "aws": ["s3_bucket_secure_transport_policy"],
+        "azure": ["storage_secure_transfer_required_is_enabled", "storage_ensure_minimum_tls_version_12"],
+        "gcp": ["cloudsql_instance_ssl_connections"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-04",
+      "name": "Enable audit logging",
+      "description": "Enable audit records for assessed cloud management or data-service activity.",
+      "attributes": {
+        "Section": "Audit logging",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(c)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(c)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed control-plane and data-service logging; also review application-level personal-data access.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Covers AWS multi-region CloudTrail management events, Azure SQL Server auditing and Key Vault logging, and GCP audit logs. It does not prove complete log coverage, retention, active monitoring, incident response or legally timely breach notification."
+      },
+      "checks": {
+        "aws": ["cloudtrail_multi_region_enabled_logging_management_events", "cloudtrail_log_file_validation_enabled", "s3_bucket_server_access_logging_enabled"],
+        "azure": ["sqlserver_auditing_enabled", "keyvault_logging_enabled", "monitor_diagnostic_settings_exists"],
+        "gcp": ["iam_audit_logs_enabled", "cloudstorage_audit_logs_enabled"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-05",
+      "name": "Configure recovery safeguards",
+      "description": "Enable available backup, versioning or soft-delete safeguards for assessed data services.",
+      "attributes": {
+        "Section": "Recovery",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(d)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(d)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed databases and object storage; evaluate recovery coverage for the full processing environment.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Covers AWS RDS automated backups and S3 versioning, Azure Storage soft delete and blob versioning, and GCP Cloud SQL automated backups and Cloud Storage versioning. Versioning and soft delete are not independent backups. Restore testing, retention suitability and erasure obligations require separate review."
+      },
+      "checks": {
+        "aws": ["rds_instance_backup_enabled", "s3_bucket_object_versioning"],
+        "azure": ["storage_ensure_soft_delete_is_enabled", "storage_blob_versioning_is_enabled"],
+        "gcp": ["cloudsql_instance_automated_backups", "cloudstorage_bucket_versioning_enabled"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-06",
+      "name": "Protect data at rest",
+      "description": "Inspect encryption-at-rest settings for supported storage resources and verify protection for remaining personal-data stores separately.",
+      "attributes": {
+        "Section": "Encryption at rest",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(a)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(a)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed AWS volumes and databases, and Azure SQL databases. GCP and other stores require manual evidence for this entry.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "No GCP check is mapped merely to require customer-managed keys: provider-managed encryption may be appropriate. The deprecated S3 default-encryption check is excluded. Review all stores, exports, backups, application encryption and permitted alternative safeguards; this is not an exhaustive encryption assessment."
+      },
+      "checks": {
+        "aws": ["ec2_ebs_volume_encryption", "rds_instance_storage_encrypted"],
+        "azure": ["sqlserver_tde_encryption_enabled"],
+        "gcp": []
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-07",
+      "name": "Protect cryptographic keys",
+      "description": "Restrict public access to cryptographic keys and protect key recovery where supported.",
+      "attributes": {
+        "Section": "Key protection",
+        "LegalReference": "Act section 8(5); Rules 2025, rules 6(1)(a), 6(1)(b) and 6(1)(d)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(a)", "Rule 6(1)(b)", "Rule 6(1)(d)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed AWS/GCP KMS keys and Azure Key Vault recovery settings.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "These checks are different provider-specific indicators. They do not prove key separation, application secret handling, complete key lifecycle management or that a particular rotation interval is legally required."
+      },
+      "checks": {"aws": ["kms_key_not_publicly_accessible"], "azure": ["keyvault_recoverable"], "gcp": ["kms_key_not_publicly_accessible"]}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-08",
+      "name": "Restrict administrative network exposure",
+      "description": "Restrict Internet access to SSH and RDP on assessed cloud network rules.",
+      "attributes": {
+        "Section": "Network access",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(b)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(b)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed security groups, network security groups and firewall rules.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "SSH/RDP checks are selected safeguards, not a full reachability analysis. Review database endpoints, application ports, private routing, service identities and approved exceptions separately."
+      },
+      "checks": {
+        "aws": ["ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22", "ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389"],
+        "azure": ["network_ssh_internet_access_restricted", "network_rdp_internet_access_restricted"],
+        "gcp": ["compute_firewall_ssh_access_from_the_internet_allowed", "compute_firewall_rdp_access_from_the_internet_allowed"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-09",
+      "name": "Configure detection and alerting",
+      "description": "Enable selected threat detection or security-change alerting configurations.",
+      "attributes": {
+        "Section": "Detection and response",
+        "LegalReference": "Act section 8(5); Rules 2025, rule 6(1)(c)",
+        "SourceClauses": ["Act 8(5)", "Rule 6(1)(c)"],
+        "Coverage": "Partial",
+        "Applicability": "Assessed AWS GuardDuty, Azure network-change alerts and GCP audit/IAM-change alerts.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Specific products are baseline choices, not mandated vendors. Configuration does not demonstrate alert delivery, complete detection coverage, staffing, incident investigation or response effectiveness."
+      },
+      "checks": {
+        "aws": ["guardduty_is_enabled"],
+        "azure": ["monitor_alert_create_update_nsg", "monitor_alert_delete_nsg"],
+        "gcp": ["logging_log_metric_filter_and_alert_for_audit_configuration_changes_enabled", "logging_log_metric_filter_and_alert_for_custom_role_changes_enabled"]
+      }
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-10",
+      "name": "Verify protection coverage and alternative safeguards",
+      "description": "Identify personal-data stores and flows and assess whether encryption, obfuscation, masking, virtual tokens or other appropriate measures protect them.",
+      "attributes": {
+        "Section": "Protection assurance",
+        "LegalReference": "Act sections 8(4)-(5); Rules 2025, rule 6(1)(a)",
+        "SourceClauses": ["Act 8(4)", "Act 8(5)", "Rule 6(1)(a)"],
+        "Coverage": "Manual",
+        "Applicability": "All in-scope personal-data processing, including processors, derived copies, backups and exports.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Requires a data inventory, flow diagrams and evidence of appropriate safeguards. Prowler does not discover all personal data or validate application-level masking and tokenization. The alternatives in rule 6(1)(a) are not all independently mandatory."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-11",
+      "name": "Review access and investigate incidents",
+      "description": "Demonstrate log review, detection of unauthorized personal-data access, investigation and remediation to prevent recurrence.",
+      "attributes": {
+        "Section": "Detection and response",
+        "LegalReference": "Rules 2025, rule 6(1)(c)",
+        "SourceClauses": ["Rule 6(1)(c)"],
+        "Coverage": "Manual",
+        "Applicability": "Data Fiduciaries and relevant processor operations.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review access reviews, monitoring records, incident tickets, investigation evidence and remediation follow-up. Enabled logging alone does not satisfy this entry."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-12",
+      "name": "Validate continued processing and restoration",
+      "description": "Demonstrate continued processing after confidentiality, integrity or availability is compromised, including tested recovery arrangements.",
+      "attributes": {
+        "Section": "Recovery",
+        "LegalReference": "Rules 2025, rule 6(1)(d)",
+        "SourceClauses": ["Rule 6(1)(d)"],
+        "Coverage": "Manual",
+        "Applicability": "Personal-data processing systems and their cloud dependencies.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review recovery plans, restore exercises, backup isolation, integrity verification and incident outcomes. The rule does not prescribe a universal recovery-time target; enabled backups alone do not prove recovery."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-13",
+      "name": "Retain security evidence for the required period",
+      "description": "Retain the logs and personal data described in rule 6(1)(e) for one year unless compliance with another law requires otherwise.",
+      "attributes": {
+        "Section": "Retention and erasure",
+        "LegalReference": "Rules 2025, rule 6(1)(e)",
+        "SourceClauses": ["Rule 6(1)(e)"],
+        "Coverage": "Manual",
+        "Applicability": "Evidence needed for unauthorized-access detection, investigation, remediation and continued processing; assess applicable legal exceptions.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review retention policies and sampled historical evidence across all stores and processors. No generic 90-day or configurable retention check is treated as proof of the one-year obligation."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-14",
+      "name": "Require processor security commitments",
+      "description": "Use valid processor contracts containing appropriate provisions for reasonable security safeguards and verify shared responsibilities.",
+      "attributes": {
+        "Section": "Processor assurance",
+        "LegalReference": "Act sections 8(1)-(2); Rules 2025, rule 6(1)(f)",
+        "SourceClauses": ["Act 8(1)", "Act 8(2)", "Rule 6(1)(f)"],
+        "Coverage": "Manual",
+        "Applicability": "Where a cloud provider or other party processes personal data on the Data Fiduciary's behalf.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; verify Act commencement separately.",
+        "EvidenceLimitations": "Requires executed contracts, processor inventory and responsibility reviews. A cloud configuration scan cannot verify contractual provisions or processor compliance."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-15",
+      "name": "Maintain effective technical and organizational safeguards",
+      "description": "Assess the effectiveness of the cloud-security program, including access lifecycle, secure configuration, vulnerability remediation and change management as appropriate to the processing risks.",
+      "attributes": {
+        "Section": "Security governance",
+        "LegalReference": "Act sections 8(4)-(5); Rules 2025, rule 6(1)(g)",
+        "SourceClauses": ["Act 8(4)", "Act 8(5)", "Rule 6(1)(g)"],
+        "Coverage": "Manual",
+        "Applicability": "Data Fiduciaries and processing performed on their behalf.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review policies, risk assessments, security testing, remediation and operating evidence. The listed engineering practices are assessment evidence, not a claim that the rule prescribes each practice or a fixed patching deadline."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-16",
+      "name": "Notify affected Data Principals of breaches",
+      "description": "On awareness of a personal-data breach, notify each affected Data Principal without delay with the information required by rule 7(1).",
+      "attributes": {
+        "Section": "Breach notification",
+        "LegalReference": "Act section 8(6); Rules 2025, rule 7(1)(a)-(e)",
+        "SourceClauses": ["Act 8(6)", "Rule 7(1)"],
+        "Coverage": "Manual",
+        "Applicability": "Personal-data breaches affecting in-scope cloud processing.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review notification procedures and actual incident records for breach details, consequences, mitigation, recommended safety measures and contact information. Cloud alerts are not legal notifications."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-17",
+      "name": "Notify the Board and document breach follow-up",
+      "description": "Notify the Board without delay and provide the required detailed follow-up within seventy-two hours of awareness, or a longer period allowed by the Board on written request.",
+      "attributes": {
+        "Section": "Breach notification",
+        "LegalReference": "Act section 8(6); Rules 2025, rule 7(2)(a)-(b)",
+        "SourceClauses": ["Act 8(6)", "Rule 7(2)"],
+        "Coverage": "Manual",
+        "Applicability": "Personal-data breaches affecting in-scope cloud processing.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Review initial reports, timestamps, detailed causes, mitigation, findings about the responsible person, remedial measures and reports on Data Principal notifications. Prowler neither sends nor verifies these reports."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-18",
+      "name": "Retain and erase processing records across cloud processors",
+      "description": "Retain personal data, associated traffic data and processing logs for at least one year from processing for Seventh Schedule purposes, then cause erasure unless further retention is required by another law or notified by Government.",
+      "attributes": {
+        "Section": "Retention and erasure",
+        "LegalReference": "Rules 2025, rule 8(3) and Seventh Schedule",
+        "SourceClauses": ["Rule 8(3)"],
+        "Coverage": "Manual",
+        "Applicability": "Processing by the Data Fiduciary or its processors, including cloud service providers; reconcile all applicable retention duties.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Requires processing dates, data/log inventories, processor evidence, legal holds and verified erasure. A bucket lifecycle policy alone cannot establish compliance and must not be used to erase records indiscriminately."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-19",
+      "name": "Propagate lawful erasure to cloud copies and processors",
+      "description": "Implement erasure when consent is withdrawn or the purpose is no longer served, including processor copies, subject to required retention. Apply the Third Schedule inactivity periods and prior notice only where applicable.",
+      "attributes": {
+        "Section": "Retention and erasure",
+        "LegalReference": "Act sections 8(7)-(8) and 12(3); Rules 2025, rules 8(1)-(2) and Third Schedule",
+        "SourceClauses": ["Act 8(7)", "Act 8(8)", "Act 12(3)", "Rule 8(1)", "Rule 8(2)"],
+        "Coverage": "Manual",
+        "Applicability": "Cloud records, replicas, exports and processor copies; Third Schedule duties apply only to the specified classes and purposes.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; verify Act commencement separately.",
+        "EvidenceLimitations": "Requires data lineage, deletion workflows, legal-retention decisions and evidence of erasure. For applicable inactivity erasure, verify the at-least-forty-eight-hour notice. Three years is not a universal storage-retention setting."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-20",
+      "name": "Assess and audit significant cloud processing",
+      "description": "For a notified Significant Data Fiduciary, conduct the required impact assessment and audit in each twelve-month period and cause significant observations to be reported to the Board.",
+      "attributes": {
+        "Section": "Conditional safeguards",
+        "LegalReference": "Act section 10(2); Rules 2025, rules 13(1)-(2)",
+        "SourceClauses": ["Act 10(2)", "Rule 13(1)", "Rule 13(2)"],
+        "Coverage": "Manual",
+        "Applicability": "Only entities notified as Significant Data Fiduciaries; assess cloud processing within the wider assessment and audit.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; annual periods depend on SDF notification.",
+        "EvidenceLimitations": "Prowler does not determine SDF designation, auditor independence, impact-assessment adequacy or Board reporting. Review notification, assessment, audit and submission evidence."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-21",
+      "name": "Review technical and algorithmic processing risks",
+      "description": "For a Significant Data Fiduciary, perform due diligence that technical measures, including algorithmic software used for personal-data processing, are not likely to pose risks to Data Principal rights.",
+      "attributes": {
+        "Section": "Conditional safeguards",
+        "LegalReference": "Rules 2025, rule 13(3)",
+        "SourceClauses": ["Rule 13(3)"],
+        "Coverage": "Manual",
+        "Applicability": "Notified Significant Data Fiduciaries, including cloud-hosted applications and processing services.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Requires architecture, software and algorithmic risk reviews. Cloud configuration checks cannot establish the absence of risks to Data Principal rights."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-22",
+      "name": "Enforce applicable cloud transfer restrictions",
+      "description": "Identify applicable restrictions on international personal-data transfers and enforce them across processing, replicas, backups and traffic-data flows, including SDF-specific restrictions where notified.",
+      "attributes": {
+        "Section": "Transfers and residency",
+        "LegalReference": "Act section 16; Rules 2025, rules 13(4)-(5) and 15",
+        "SourceClauses": ["Act 16", "Rule 13(4)", "Rule 15"],
+        "Coverage": "Manual",
+        "Applicability": "Subject to applicable Government notifications/orders, other transfer laws and SDF-specific data designations.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; also verify applicable notifications and orders.",
+        "EvidenceLimitations": "No blanket India-only region rule is assumed. Region inventory alone cannot prove data-flow, remote-access, foreign-state disclosure or traffic-data compliance; review legal scope and processor arrangements."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-23",
+      "name": "Verify Consent Manager platform safeguards",
+      "description": "For a registered Consent Manager, verify platform security, unreadability of shared personal-data contents, required records and their retention, non-delegation, certification and effective audits of technical and organizational safeguards.",
+      "attributes": {
+        "Section": "Conditional safeguards",
+        "LegalReference": "Rules 2025, rule 4; First Schedule Part A 9 and Part B 2-4, 6-7 and 12",
+        "SourceClauses": ["Rule 4", "First Schedule Part A 9", "First Schedule Part B 2", "First Schedule Part B 3", "First Schedule Part B 4", "First Schedule Part B 6", "First Schedule Part B 7", "First Schedule Part B 12"],
+        "Coverage": "Manual",
+        "Applicability": "Only registered Consent Managers and their platform architecture; not every cloud customer is a Consent Manager.",
+        "Commencement": "Rule 1(3): one year after Gazette publication; verify registration and applicable Board standards.",
+        "EvidenceLimitations": "Review architecture preventing content access, seven-year-or-longer consent records, accessible machine-readable records, certificates and audit reports. Ordinary cloud encryption or outsourcing contracts do not prove these requirements."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    },
+    {
+      "id": "VRIKA-DPDPA-CS-24",
+      "name": "Verify safeguards for specified exempt processing",
+      "description": "For processing covered by rules 5 or 16, assess the Second Schedule standards, including necessary data, accuracy, purpose-based retention, reasonable security safeguards and accountability.",
+      "attributes": {
+        "Section": "Conditional safeguards",
+        "LegalReference": "Rules 2025, rules 5 and 16; Second Schedule (a)-(h)",
+        "SourceClauses": ["Rule 5", "Rule 16", "Second Schedule (c)", "Second Schedule (d)", "Second Schedule (e)", "Second Schedule (f)", "Second Schedule (h)"],
+        "Coverage": "Manual",
+        "Applicability": "Specified State processing and eligible research, archiving or statistical processing; eligibility and all conditions require review.",
+        "Commencement": "Rule 1(4): eighteen months after Gazette publication; readiness assessment before commencement.",
+        "EvidenceLimitations": "Exemption is not assumed from provider type. Review purpose, lawful basis, data minimization, integrity, retention, processor safeguards and accountable ownership. This scanner does not certify exemption eligibility."
+      },
+      "checks": {"aws": [], "azure": [], "gcp": []}
+    }
+  ]
+}

@@ -128,6 +128,7 @@ COPY --chown=prowler:prowler docker-entrypoint.sh ./docker-entrypoint.sh
 WORKDIR /home/prowler/backend
 
 RUN /home/prowler/.venv/bin/python scripts/patch_severity.py
+RUN /home/prowler/.venv/bin/python scripts/install_compliance.py
 
 # Development image
 FROM build AS dev

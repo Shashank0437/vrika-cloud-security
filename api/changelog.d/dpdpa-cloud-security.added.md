@@ -1,0 +1,1 @@
+Add a DPDPA cloud-security readiness catalog for AWS, Azure and GCP with source-linked partial and manual coverage, validated SDK installation and shared API/worker image packaging

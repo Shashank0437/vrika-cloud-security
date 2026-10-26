@@ -2,6 +2,14 @@
 
 This repository contains the JSON API and Task Runner components for Prowler, which facilitate a complete backend that interacts with the Prowler SDK and is used by the Prowler UI.
 
+## DPDPA cloud security
+
+The API image includes a DPDPA cloud-security readiness catalog for AWS, Azure and
+GCP. It maps automated evidence and manual obligations to the Act and final 2025
+Rules without claiming full legal compliance. See the
+[catalog coverage and deployment guide](src/backend/scripts/compliance/README.md)
+for source references, limitations, scoring and installation instructions.
+
 ## Vrika scoped roles
 
 Migration `0103_role_vrika_policy` adds per-user Vrika role policies and task
