@@ -9,6 +9,7 @@ import CISLogo from "./cis.svg";
 import CISALogo from "./cisa.svg";
 import CSALogo from "./csa.svg";
 import DORALogo from "./dora.svg";
+import DPDPALogo from "./dpdpa.svg";
 import ENSLogo from "./ens.png";
 import FedRAMPLogo from "./fedramp.svg";
 import FFIECLogo from "./ffiec.svg";
@@ -76,6 +77,7 @@ const COMPLIANCE_LOGOS = [
   // The compliance_id is `dora_2022_2554`; the `dora` keyword still matches
   // it via `includes`, with no provider suffix.
   ["dora", DORALogo],
+  ["dpdpa", DPDPALogo],
   ["secnumcloud", ANSSILogo],
   ["okta", OktaLogo],
   ["aws", AWSLogo],

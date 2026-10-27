@@ -3,6 +3,21 @@ import { describe, expect, it } from "vitest";
 import { getComplianceIcon } from "./IconCompliance";
 
 describe("getComplianceIcon", () => {
+  describe("DPDPA badge", () => {
+    it("resolves the framework name and IDs to a dedicated icon", () => {
+      const dpdpaLogo = getComplianceIcon("DPDPA Cloud Security Baseline");
+
+      expect(dpdpaLogo).toBeDefined();
+      expect(dpdpaLogo).not.toBe(getComplianceIcon("AWS"));
+      expect(dpdpaLogo).not.toBe(getComplianceIcon("GDPR"));
+      expect(getComplianceIcon("dpdpa")).toBe(dpdpaLogo);
+      expect(getComplianceIcon("dpdpa_2023")).toBe(dpdpaLogo);
+      expect(getComplianceIcon("dpdpa_2023_aws")).toBe(dpdpaLogo);
+      expect(getComplianceIcon("dpdpa_2023_azure")).toBe(dpdpaLogo);
+      expect(getComplianceIcon("dpdpa_2023_gcp")).toBe(dpdpaLogo);
+    });
+  });
+
   describe("framework name matching", () => {
     it("resolves ASD Essential Eight via the `essential` keyword", () => {
       expect(getComplianceIcon("ASD-Essential-Eight")).toBeDefined();

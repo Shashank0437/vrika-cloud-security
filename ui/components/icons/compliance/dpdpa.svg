@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>DPDPA custom privacy badge</title>
+  <rect x="2" y="2" width="60" height="60" rx="8" fill="#ecfdf5"/>
+  <path d="M23 24v-5a9 9 0 0 1 18 0v5" fill="none" stroke="#166534" stroke-width="4"/>
+  <rect x="18" y="23" width="28" height="21" rx="4" fill="#166534"/>
+  <circle cx="32" cy="31" r="3" fill="#fff"/>
+  <path d="M32 33v5" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <text x="32" y="56" fill="#14532d" font-family="sans-serif" font-size="12" font-weight="800" text-anchor="middle">DPDPA</text>
+</svg>
